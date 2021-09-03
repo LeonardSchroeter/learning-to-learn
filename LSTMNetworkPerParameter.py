@@ -8,6 +8,10 @@ class LSTMNetworkPerParameter(keras.layers.Layer):
         self.lstm = keras.layers.LSTM(10, stateful=True)
         self.output_layer = keras.layers.Dense(1)
 
+    def reset_states(self):
+        if self.lstm.built:
+            self.lstm.reset_states()
+
     def call(self, inputs):
         inputs_size = tf.size(inputs).numpy()
         inputs_shape = tf.size(inputs).numpy()
