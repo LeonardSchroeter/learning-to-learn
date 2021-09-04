@@ -127,5 +127,48 @@ def example_3():
 
         optimizer_network.reset_states()
 
+# Apparently tf.GradientTape does not track variable assignment operations. Therefore assigning new values to theta
+# in each step makes the tape forget that this new value depends on the output of the optimizer network, which results in
+# the gradient of the new theta w.r.t. the weights of the optimizer network to return Null.
+# We need to compute this gradient though in order to train the optimizer network.
+# I tried a workaround where I assign completely new tensors to theta. This made the gradient of theta w.r.t. 
+# the weights of the optimizer network to work fine, but in the next step the gradient of the loss of the
+# objective function network w.r.t. its weights theta throws an error.
+# --> Will have to look into why this happens and if I can find another workaround for this.
+def example_4():
+    optimizer_network = LSTMNetworkPerParameter()
+    optimizer_optimizer = keras.optimizers.Adam()
+
+    for training_step in range(100_000):
+        print("TRAINING STEP: ", training_step)
+        quadratic_function = QuadraticFunctionLayer(10)
+
+        with tf.GradientTape(persistent=True) as tape:
+
+            optimizer_loss = tf.zeros([1], tf.float32)
+
+            for step in range(50):
+                loss = quadratic_function(tf.zeros([1]))
+
+                with tape.stop_recording():
+                    gradients = tape.gradient(loss, quadratic_function.trainable_weights)
+
+                gradients = tf.stop_gradient(gradients)
+
+                optimizer_output = optimizer_network(gradients)
+
+                for i, (theta_t, g_t) in enumerate(zip(quadratic_function._trainable_weights, optimizer_output)):
+                    quadratic_function._trainable_weights[i] = theta_t + g_t
+
+                optimizer_loss = optimizer_loss + loss
+
+                if step % 10 == 0:
+                    print("  Loss: ", loss.numpy())
+
+        optimizer_gradients = tape.gradient(optimizer_loss, optimizer_network.trainable_weights)
+        optimizer_optimizer.apply_gradients(zip(optimizer_gradients, optimizer_network.trainable_weights))
+
+        optimizer_network.reset_states()
+
 if __name__ == "__main__":
-    example_3()
+    example_4()

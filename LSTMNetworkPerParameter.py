@@ -14,7 +14,7 @@ class LSTMNetworkPerParameter(keras.layers.Layer):
 
     def call(self, inputs):
         inputs_size = tf.size(inputs).numpy()
-        inputs_shape = tf.size(inputs).numpy()
+        inputs_shape = tf.shape(inputs).numpy()
 
         x = self.lstm(tf.reshape(inputs, [inputs_size, 1, 1]))
         x = self.output_layer(x)
