@@ -6,9 +6,9 @@ from collections import deque
 
 import tensorflow as tf
 from tensorflow import keras
-
-from LSTMNetworkPerParameter import LSTMNetworkPerParameter
-from QuadraticFunction import QuadraticFunction, QuadraticFunctionLayer
+from tensorflow.LSTMNetworkPerParameter import LSTMNetworkPerParameter
+from tensorflow.QuadraticFunction import (QuadraticFunction,
+                                          QuadraticFunctionLayer)
 
 
 # accumulate losses and train optimizer once for a single objective function
@@ -172,4 +172,4 @@ def example_4():
         optimizer_network.reset_states()
 
 if __name__ == "__main__":
-    example_4()
+    example_3()
