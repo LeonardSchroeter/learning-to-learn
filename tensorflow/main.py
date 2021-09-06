@@ -134,7 +134,8 @@ def example_3():
 # I tried a workaround where I assign completely new tensors to theta. This made the gradient of theta w.r.t. 
 # the weights of the optimizer network to work fine, but in the next step the gradient of the loss of the
 # objective function network w.r.t. its weights theta throws an error.
-# --> Will have to look into why this happens and if I can find another workaround for this.
+# Will have to look into why this happens and if I can find another workaround for this.
+# Maybe try to use pytorch instead of tensorflow/keras? --> Find out whether autograd supports variable assignments first
 def example_4():
     optimizer_network = LSTMNetworkPerParameter()
     optimizer_optimizer = keras.optimizers.Adam()
