@@ -5,10 +5,9 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 from collections import deque
 
 import tensorflow as tf
+from LSTMNetworkPerParameter import LSTMNetworkPerParameter
+from QuadraticFunction import QuadraticFunction, QuadraticFunctionLayer
 from tensorflow import keras
-from tensorflow.LSTMNetworkPerParameter import LSTMNetworkPerParameter
-from tensorflow.QuadraticFunction import (QuadraticFunction,
-                                          QuadraticFunctionLayer)
 
 
 # accumulate losses and train optimizer once for a single objective function
