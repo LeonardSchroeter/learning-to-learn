@@ -4,10 +4,12 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 from collections import deque
 
+import mock
 import tensorflow as tf
+from tensorflow import keras
+
 from LSTMNetworkPerParameter import LSTMNetworkPerParameter
 from QuadraticFunction import QuadraticFunction, QuadraticFunctionLayer
-from tensorflow import keras
 
 
 # accumulate losses and train optimizer once for a single objective function
@@ -135,19 +137,43 @@ def example_3():
 # objective function network w.r.t. its weights theta throws an error.
 # Will have to look into why this happens and if I can find another workaround for this.
 # Maybe try to use pytorch instead of tensorflow/keras? --> Find out whether autograd supports variable assignments first
+
+
 def example_4():
+    theta = {}
+
+    original_add_weight = keras.layers.Layer.add_weight
+    def custom_add_weight(self, name, shape, dtype, initializer, **kwargs):
+        if initializer:
+            tensor = initializer(shape, dtype=dtype)
+        else:
+            tensor = tf.zeros(shape, dtype=dtype)
+        theta[name] = tensor
+
+        original_add_weight(self, name=name, shape=shape, dtype=dtype, initializer=initializer, getter=custom_getter, **kwargs)
+        return custom_getter(name)
+
+    def custom_getter(name, **kwargs):
+        if name in theta:
+            return theta[name]
+        return None
+
     optimizer_network = LSTMNetworkPerParameter()
     optimizer_optimizer = keras.optimizers.Adam()
 
     for training_step in range(100_000):
         print("TRAINING STEP: ", training_step)
-        quadratic_function = QuadraticFunctionLayer(10)
+        with mock.patch.object(keras.layers.Layer, "add_weight", custom_add_weight):
+            quadratic_function = QuadraticFunctionLayer(10)
 
+        optimizer_network.reset_states()
+        
         with tf.GradientTape(persistent=True) as tape:
-
             optimizer_loss = tf.zeros([1], tf.float32)
 
             for step in range(50):
+                tape.watch(quadratic_function.trainable_weights)
+
                 loss = quadratic_function(tf.zeros([1]))
 
                 with tape.stop_recording():
@@ -157,8 +183,9 @@ def example_4():
 
                 optimizer_output = optimizer_network(gradients)
 
-                for i, (theta_t, g_t) in enumerate(zip(quadratic_function._trainable_weights, optimizer_output)):
-                    quadratic_function._trainable_weights[i] = theta_t + g_t
+                for name, theta_t, g_t in (zip(theta.keys(), theta.values(), optimizer_output)):
+                    theta[name] = theta_t + g_t
+                quadratic_function.refresh(theta)
 
                 optimizer_loss = optimizer_loss + loss
 
@@ -168,7 +195,6 @@ def example_4():
         optimizer_gradients = tape.gradient(optimizer_loss, optimizer_network.trainable_weights)
         optimizer_optimizer.apply_gradients(zip(optimizer_gradients, optimizer_network.trainable_weights))
 
-        optimizer_network.reset_states()
-
 if __name__ == "__main__":
-    example_3()
+    tf.random.set_seed(1)
+    example_4()
