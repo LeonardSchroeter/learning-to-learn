@@ -19,10 +19,6 @@ class QuadraticFunctionLayer(keras.layers.Layer):
         self.W = tf.random.normal([dimension, dimension])
         self.y = tf.random.normal([dimension])
         self.theta = self.add_weight(name="theta", shape=[self.dimension], dtype=tf.float32, initializer=tf.keras.initializers.RandomNormal(), trainable=True)
-
-    def refresh(self, weights):
-        for name, weight in weights.items():
-            setattr(self, name, weight)
     
     def call(self, inputs=tf.zeros([1])):
         return tf.norm(tf.linalg.matvec(self.W, self.theta) - self.y)

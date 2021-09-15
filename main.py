@@ -138,7 +138,7 @@ def example_3():
 # Will have to look into why this happens and if I can find another workaround for this.
 # Maybe try to use pytorch instead of tensorflow/keras? --> Find out whether autograd supports variable assignments first
 
-
+# TODO Currently only weights in the lowest level layer are supported, have to add support for nested layers
 def example_4():
     theta = {}
 
@@ -158,6 +158,13 @@ def example_4():
             return theta[name]
         return None
 
+    original___call__ = keras.layers.Layer.__call__
+    def custom___call__(self, *args, **kwargs):
+        for name, weight in theta.items():
+            if hasattr(self, name):
+                setattr(self, name, weight)
+        return original___call__(self, *args, **kwargs)
+        
     optimizer_network = LSTMNetworkPerParameter()
     optimizer_optimizer = keras.optimizers.Adam()
 
@@ -167,25 +174,24 @@ def example_4():
             quadratic_function = QuadraticFunctionLayer(10)
 
         optimizer_network.reset_states()
-        
         with tf.GradientTape(persistent=True) as tape:
             optimizer_loss = tf.zeros([1], tf.float32)
 
             for step in range(50):
                 tape.watch(quadratic_function.trainable_weights)
 
-                loss = quadratic_function(tf.zeros([1]))
-
+                with mock.patch.object(keras.layers.Layer, "__call__", custom___call__):
+                    loss = quadratic_function(tf.zeros([1]))
+                
                 with tape.stop_recording():
                     gradients = tape.gradient(loss, quadratic_function.trainable_weights)
-
+                
                 gradients = tf.stop_gradient(gradients)
 
                 optimizer_output = optimizer_network(gradients)
 
                 for name, theta_t, g_t in (zip(theta.keys(), theta.values(), optimizer_output)):
                     theta[name] = theta_t + g_t
-                quadratic_function.refresh(theta)
 
                 optimizer_loss = optimizer_loss + loss
 
