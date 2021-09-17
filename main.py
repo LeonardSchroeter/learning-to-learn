@@ -160,6 +160,7 @@ def example_4():
 
     original___call__ = keras.layers.Layer.__call__
     def custom___call__(self, *args, **kwargs):
+        print(self.name)
         for name, weight in theta.items():
             if hasattr(self, name):
                 setattr(self, name, weight)
