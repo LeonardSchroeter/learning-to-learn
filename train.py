@@ -13,13 +13,19 @@ from QuadraticFunction import QuadraticFunctionLayer
 
 
 class LearningToLearn():
-    def __init__(self, optimizer_network, objective_network_generator):
+    def __init__(self, optimizer_network, objective_network_generator, accumulate_losses = tf.add_n):
         self.optimizer_network = optimizer_network
         self.objective_network_generator = objective_network_generator
         self.objective_network_weights = {}
+        self.accumulate_losses = accumulate_losses
 
     def clear_weights(self):
         self.objective_network_weights = {}
+
+    def apply_weight_changes(self, g_t):
+        for layer, g_t_layer in zip(self.objective_network_weights.keys(), g_t):
+            for name, g_t_tensor in zip(self.objective_network_weights[layer].keys(), g_t_layer):
+                self.objective_network_weights[layer][name] = self.objective_network_weights[layer][name] + g_t_tensor
 
     def custom_getter(self, layer_name):
         def _custom_getter(name, **kwargs):
@@ -78,17 +84,23 @@ class LearningToLearn():
 
                 with tape.stop_recording():
                     gradients = tape.gradient(loss, self.objective_network_weights)
-                # gradients = tf.stop_gradient(gradients)
 
                 gradients = [list(grads.values()) for grads in gradients.values()]
-                print(gradients)
-                # TODO Fix error where gradients and the optimizer_output have the wrong data structure
+
+                # TODO Find out whether this line is needed.
+                # I think it doesn't, since computing the gradients inside stop_recording
+                # is enough to make the tape not track the gradients.
+                # Simple experiments of running the code with and without this line
+                # give the same results supporting this assumption.
+                # gradients = tf.stop_gradient(gradients)
+
                 optimizer_output = self.optimizer_network(gradients)
 
-                for (name, weight_t), g_t in (zip(self.objective_network_weights.items(), optimizer_output)):
-                    self.objective_network_weights[name] = weight_t + g_t
-            optimizer_loss = tf.add_n(losses)
+                self.apply_weight_changes(optimizer_output)
+            
+            optimizer_loss = self.accumulate_losses(losses)
             print(loss.numpy())
+        
         optimizer_gradients = tape.gradient(optimizer_loss, self.optimizer_network.trainable_weights)
 
         return list(optimizer_gradients)
