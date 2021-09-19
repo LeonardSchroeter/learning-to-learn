@@ -8,14 +8,16 @@ import mock
 import tensorflow as tf
 from tensorflow import keras
 
+from examples import MLP
 from LSTMNetworkPerParameter import LSTMNetworkPerParameter
 from QuadraticFunction import QuadraticFunctionLayer
 
 
 class LearningToLearn():
-    def __init__(self, optimizer_network, objective_network_generator, accumulate_losses = tf.add_n):
+    def __init__(self, optimizer_network, objective_network_generator, objective_loss_fn, accumulate_losses = tf.add_n):
         self.optimizer_network = optimizer_network
         self.objective_network_generator = objective_network_generator
+        self.objective_loss_fn = objective_loss_fn
         self.objective_network_weights = {}
         self.accumulate_losses = accumulate_losses
 
@@ -78,8 +80,10 @@ class LearningToLearn():
 
                 with mock.patch.object(keras.layers.Layer, "add_weight", self.custom_add_weight()):
                     with mock.patch.object(keras.layers.Layer, "__call__", self.custom_call()):
-                        loss = objective_network(tf.zeros([1]))
+                        outputs = objective_network(tf.zeros([1]))
                 
+                loss = self.objective_loss_fn(outputs, None)
+
                 losses.append(loss)
 
                 with tape.stop_recording():
@@ -108,8 +112,10 @@ class LearningToLearn():
 def main():
     tf.random.set_seed(1)
     objective_network_generator = lambda : QuadraticFunctionLayer(10)
+    # objective_network_generator = lambda : MLP()
+    objective_loss_fn = lambda x, y: x
     optimizer_network = LSTMNetworkPerParameter()
-    ltl = LearningToLearn(optimizer_network, objective_network_generator)
+    ltl = LearningToLearn(optimizer_network, objective_network_generator, objective_loss_fn)
     ltl.train_optimizer()
 
 if __name__ == "__main__":

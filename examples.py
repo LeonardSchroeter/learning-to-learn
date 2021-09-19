@@ -1,14 +1,13 @@
 import tensorflow as tf
-from keras.layers import Linear
 from tensorflow import keras
 
 
 class MLP(keras.layers.Layer):
     def __init__(self):
         super(MLP, self).__init__()
-        self.linear_1 = Linear(32)
-        self.linear_2 = Linear(32)
-        self.linear_3 = Linear(10)
+        self.linear_1 = keras.layers.Linear(32)
+        self.linear_2 = keras.layers.Linear(32)
+        self.linear_3 = keras.layers.Linear(10)
 
     def call(self, inputs):
         x = self.linear_1(inputs)
