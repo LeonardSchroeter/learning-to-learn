@@ -8,7 +8,7 @@ import mock
 import tensorflow as tf
 from tensorflow import keras
 
-from examples import MLP
+from examples import ConvNN
 from optimizer_network import LSTMNetworkPerParameter
 from QuadraticFunction import QuadraticFunctionLayer
 
@@ -119,6 +119,9 @@ class LearningToLearn():
 
                 losses.append(loss)
 
+                # TODO All outputs are zero after a small amount of steps, but the bias of the dense layer.
+                # Find out why this happends, this is likely the cause of the network not seeming to learn.
+                # There seems to be a dependency though, since they are 0 and not None
                 with tape.stop_recording():
                     gradients = tape.gradient(loss, self.objective_network_weights)
 
@@ -142,17 +145,22 @@ class LearningToLearn():
                     optimizer_loss = self.accumulate_losses(losses)
                     with tape.stop_recording():
                         optimizer_gradients = tape.gradient(optimizer_loss, self.optimizer_network.trainable_weights)
+                        # TODO Optimizer gradients are too small for ADAM to significantly change the optimizers weights
+                        # new_grads = []
+                        # for i in range(len(optimizer_gradients) - 2):
+                        #     new_grads.append(tf.math.scalar_mul(1e20, optimizer_gradients[i]))
+                        # new_grads.append(optimizer_gradients[-2])
+                        # new_grads.append(optimizer_gradients[-1])
                         optimizer_optimizer.apply_gradients(zip(optimizer_gradients, self.optimizer_network.trainable_weights))
                     losses.clear()
                     tape.reset()
-
 
 def main():
     tf.random.set_seed(1)
 
     (x_train, y_train), (x_test, y_test) = keras.datasets.mnist.load_data()
     dataset = tf.data.Dataset.from_tensor_slices(
-        (x_train.reshape(60000, 784).astype("float32") / 255, y_train)
+        (x_train.reshape(60000, 28, 28, 1).astype("float32") / 255, y_train)
     )
     # dataset = tf.data.Dataset.from_tensor_slices(
     #     (tf.zeros([60000, 784]), tf.zeros([60000]))
@@ -160,7 +168,7 @@ def main():
     dataset = dataset.shuffle(buffer_size=1024).batch(1).batch(2048)
 
     # objective_network_generator = lambda : QuadraticFunctionLayer(10)
-    objective_network_generator = lambda : MLP()
+    objective_network_generator = lambda : ConvNN()
     # objective_loss_fn = lambda x, y: y
     objective_loss_fn = keras.losses.SparseCategoricalCrossentropy()
     optimizer_network = LSTMNetworkPerParameter()
