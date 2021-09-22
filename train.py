@@ -9,7 +9,7 @@ import tensorflow as tf
 from tensorflow import keras
 
 from examples import MLP
-from LSTMNetworkPerParameter import LSTMNetworkPerParameter
+from optimizer_network import LSTMNetworkPerParameter
 from QuadraticFunction import QuadraticFunctionLayer
 
 
@@ -26,9 +26,37 @@ class LearningToLearn():
         self.objective_network_weights = {}
 
     def apply_weight_changes(self, g_t):
-        for layer, g_t_layer in zip(self.objective_network_weights.keys(), g_t):
-            for name, g_t_tensor in zip(self.objective_network_weights[layer].keys(), g_t_layer):
-                self.objective_network_weights[layer][name] = self.objective_network_weights[layer][name] + 0.01 * g_t_tensor
+        for layer_name in self.objective_network_weights.keys():
+            for weight_name in self.objective_network_weights[layer_name].keys():
+                self.objective_network_weights[layer_name][weight_name] = self.objective_network_weights[layer_name][weight_name] + 0.01 * g_t[layer_name][weight_name]
+
+    def weights_to_1d_tensor(self, weight_dict):
+        sizes_shapes = []
+        weights_1d = []
+        dict_structure = {}
+        for layer_name, layer_weights in weight_dict.items():
+            dict_structure[layer_name] = {}
+            for weight_name, weights in layer_weights.items():
+                dict_structure[layer_name][weight_name] = None
+                size = tf.size(weights).numpy()
+                shape = tf.shape(weights).numpy()
+                sizes_shapes.append((size, shape))
+                weights_1d.append(tf.reshape(weights, size))
+        all_weights_1d = tf.concat(weights_1d, 0)
+        return all_weights_1d, sizes_shapes, dict_structure
+
+    def tensor_1d_to_weights(self, tensor_1d, sizes_shapes, dict_structure):
+        result_dict = dict_structure
+        sizes, shapes = zip(*sizes_shapes)
+        sizes, shapes = list(sizes), list(shapes)
+        tensors_split = tf.split(tensor_1d, sizes, 0)
+        tensors = [tf.reshape(tensor, shape) for tensor, shape in zip(tensors_split, shapes)]
+        i = 0
+        for layer_name in result_dict.keys():
+            for weight_name in result_dict[layer_name].keys():
+                result_dict[layer_name][weight_name] = tensors[i]
+                i += 1
+        return result_dict
 
     def custom_getter(self, layer_name):
         def _custom_getter(name, **kwargs):
@@ -100,8 +128,13 @@ class LearningToLearn():
                 # Simple experiments of running the code with and without this line
                 # give the same results supporting this assumption.
                 # gradients = tf.stop_gradient(gradients)
+                
+                gradients, sizes_shapes, dict_structure = self.weights_to_1d_tensor(gradients)
 
                 optimizer_output = self.optimizer_network(gradients)
+
+                optimizer_output = self.tensor_1d_to_weights(optimizer_output, sizes_shapes, dict_structure)
+
                 self.apply_weight_changes(optimizer_output)
                 
                 if (step + 1) % T == 0:
