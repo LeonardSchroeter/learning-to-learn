@@ -19,7 +19,8 @@ class LearningToLearn():
         self.objective_network_generator = objective_network_generator
         self.objective_loss_fn = objective_loss_fn
         self.objective_network_weights = {}
-        self.dataset = dataset
+        self.dataset_train = dataset.skip(10_000)
+        self.dataset_test = dataset.take(10_000)
         self.accumulate_losses = accumulate_losses
 
     def clear_weights(self):
@@ -95,17 +96,27 @@ class LearningToLearn():
 
         for epoch in range(1, epochs + 1):
             print("Epoch: ", epoch)
-            dataset = self.dataset.shuffle(buffer_size=1024).batch(64)
+
+            dataset_train = self.dataset_train.shuffle(buffer_size=1024).batch(64)
+            dataset_test = self.dataset_test.shuffle(buffer_size=1024).batch(64)
+
             self.optimizer_network.reset_states()
             self.clear_weights()
             with mock.patch.object(keras.layers.Layer, "add_weight", self.custom_add_weight()):
                 objective_network = self.objective_network_generator()
-            self.train_objective(objective_network, optimizer_optimizer, dataset)
+            self.train_objective(objective_network, optimizer_optimizer, dataset_train)
+
+            self.optimizer_network.reset_states()
+            self.clear_weights()
+            with mock.patch.object(keras.layers.Layer, "add_weight", self.custom_add_weight()):
+                objective_network = self.objective_network_generator()
+            metric = keras.metrics.SparseCategoricalAccuracy()
+            self.evaluate_optimizer(objective_network, dataset_test, metric)
+            print("  Accuracy: ", metric.result().numpy())
+            print("______________________________")
 
     def train_objective(self, objective_network, optimizer_optimizer, dataset, T = 16):
         losses = deque(maxlen=T)
-
-        metric = keras.metrics.SparseCategoricalAccuracy()
 
         with tf.GradientTape(persistent=True) as tape:
             for step, (x, y) in dataset.enumerate().as_numpy_iterator():
@@ -144,23 +155,44 @@ class LearningToLearn():
                 self.apply_weight_changes(optimizer_output)
                 
                 if (step + 1) % T == 0:
-                    metric.reset_state()
-                    metric.update_state(y, outputs)
-                    print("  Loss: ", loss.numpy())
-                    print("  Accuracy: ", metric.result().numpy())
-                    print("______________________________")
                     optimizer_loss = self.accumulate_losses(losses)
                     with tape.stop_recording():
                         optimizer_gradients = tape.gradient(optimizer_loss, self.optimizer_network.trainable_weights)
+
                         # TODO Optimizer gradients are too small for ADAM to significantly change the optimizers weights
-                        # new_grads = []
-                        # for i in range(len(optimizer_gradients) - 2):
-                        #     new_grads.append(tf.math.scalar_mul(1e20, optimizer_gradients[i]))
-                        # new_grads.append(optimizer_gradients[-2])
-                        # new_grads.append(optimizer_gradients[-1])
-                        optimizer_optimizer.apply_gradients(zip(optimizer_gradients, self.optimizer_network.trainable_weights))
+                        new_grads = []
+                        for i in range(len(optimizer_gradients) - 2):
+                            new_grads.append(tf.math.scalar_mul(1e20, optimizer_gradients[i]))
+                        new_grads.append(optimizer_gradients[-2])
+                        new_grads.append(optimizer_gradients[-1])
+
+                        optimizer_optimizer.apply_gradients(zip(new_grads, self.optimizer_network.trainable_weights))
                     losses.clear()
                     tape.reset()
+
+    def evaluate_optimizer(self, objective_network, dataset, metric):
+        for step, (x, y) in dataset.enumerate().as_numpy_iterator():
+            if not objective_network.built:
+                with mock.patch.object(keras.layers.Layer, "add_weight", self.custom_add_weight()):
+                    building_output = objective_network(x)
+            
+            with tf.GradientTape(persistent=True) as tape:
+                tape.watch(self.objective_network_weights)
+
+                with mock.patch.object(keras.layers.Layer, "__call__", self.custom_call()):
+                    outputs = objective_network(x)
+
+                loss = self.objective_loss_fn(y, outputs)
+
+            metric.update_state(y, outputs)
+
+            gradients = tape.gradient(loss, self.objective_network_weights)
+            gradients, sizes_shapes, dict_structure = self.weights_to_1d_tensor(gradients)
+
+            optimizer_output = self.optimizer_network(gradients)
+            optimizer_output = self.tensor_1d_to_weights(optimizer_output, sizes_shapes, dict_structure)
+
+            self.apply_weight_changes(optimizer_output)
 
 def main():
     tf.random.set_seed(1)
@@ -179,7 +211,7 @@ def main():
     objective_loss_fn = keras.losses.SparseCategoricalCrossentropy()
     optimizer_network = LSTMNetworkPerParameter()
     ltl = LearningToLearn(optimizer_network, objective_network_generator, objective_loss_fn, dataset)
-    ltl.train_optimizer()
+    ltl.train_optimizer(100)
 
 if __name__ == "__main__":
     main()

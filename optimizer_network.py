@@ -20,5 +20,5 @@ class LSTMNetworkPerParameter(keras.layers.Layer):
         x = tf.reshape(inputs, [size, 1, 1])
         x = self.lstm1(x)
         x = self.lstm2(x)
-        x = 0.01 * self.output_layer(x)
+        x = self.output_layer(x)
         return tf.reshape(x, [size])
