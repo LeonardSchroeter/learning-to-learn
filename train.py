@@ -28,7 +28,7 @@ class LearningToLearn():
     def apply_weight_changes(self, g_t):
         for layer_name in self.objective_network_weights.keys():
             for weight_name in self.objective_network_weights[layer_name].keys():
-                self.objective_network_weights[layer_name][weight_name] = self.objective_network_weights[layer_name][weight_name] + 0.01 * g_t[layer_name][weight_name]
+                self.objective_network_weights[layer_name][weight_name] = self.objective_network_weights[layer_name][weight_name] + g_t[layer_name][weight_name]
 
     def weights_to_1d_tensor(self, weight_dict):
         sizes_shapes = []
@@ -90,22 +90,25 @@ class LearningToLearn():
             return original_call(other, *args, **kwargs)
         return _custom_call
 
-    def train_optimizer(self):
+    def train_optimizer(self, epochs = 20):
         optimizer_optimizer = keras.optimizers.Adam()
 
-        for step, batch in self.dataset.enumerate():
-            print("Step: ", step.numpy())
+        for epoch in range(1, epochs + 1):
+            print("Epoch: ", epoch)
+            dataset = self.dataset.shuffle(buffer_size=1024).batch(64)
             self.optimizer_network.reset_states()
             self.clear_weights()
             with mock.patch.object(keras.layers.Layer, "add_weight", self.custom_add_weight()):
                 objective_network = self.objective_network_generator()
-            self.train_objective(objective_network, optimizer_optimizer, batch)
+            self.train_objective(objective_network, optimizer_optimizer, dataset)
 
-    def train_objective(self, objective_network, optimizer_optimizer, batch, T = 16):
+    def train_objective(self, objective_network, optimizer_optimizer, dataset, T = 16):
         losses = deque(maxlen=T)
 
+        metric = keras.metrics.SparseCategoricalAccuracy()
+
         with tf.GradientTape(persistent=True) as tape:
-            for step, (x, y) in tf.data.Dataset.from_tensor_slices(batch).enumerate().as_numpy_iterator():
+            for step, (x, y) in dataset.enumerate().as_numpy_iterator():
                 if not objective_network.built:
                     with mock.patch.object(keras.layers.Layer, "add_weight", self.custom_add_weight()):
                         building_output = objective_network(x)
@@ -125,14 +128,14 @@ class LearningToLearn():
                 with tape.stop_recording():
                     gradients = tape.gradient(loss, self.objective_network_weights)
 
+                gradients, sizes_shapes, dict_structure = self.weights_to_1d_tensor(gradients)
+
                 # TODO Find out whether this line is needed.
                 # I think it doesn't, since computing the gradients inside stop_recording
                 # is enough to make the tape not track the gradients.
                 # Simple experiments of running the code with and without this line
                 # give the same results supporting this assumption.
-                # gradients = tf.stop_gradient(gradients)
-                
-                gradients, sizes_shapes, dict_structure = self.weights_to_1d_tensor(gradients)
+                gradients = tf.stop_gradient(gradients)
 
                 optimizer_output = self.optimizer_network(gradients)
 
@@ -141,7 +144,11 @@ class LearningToLearn():
                 self.apply_weight_changes(optimizer_output)
                 
                 if (step + 1) % T == 0:
+                    metric.reset_state()
+                    metric.update_state(y, outputs)
                     print("  Loss: ", loss.numpy())
+                    print("  Accuracy: ", metric.result().numpy())
+                    print("______________________________")
                     optimizer_loss = self.accumulate_losses(losses)
                     with tape.stop_recording():
                         optimizer_gradients = tape.gradient(optimizer_loss, self.optimizer_network.trainable_weights)
@@ -165,7 +172,6 @@ def main():
     # dataset = tf.data.Dataset.from_tensor_slices(
     #     (tf.zeros([60000, 784]), tf.zeros([60000]))
     # )
-    dataset = dataset.shuffle(buffer_size=1024).batch(1).batch(2048)
 
     # objective_network_generator = lambda : QuadraticFunctionLayer(10)
     objective_network_generator = lambda : ConvNN()
