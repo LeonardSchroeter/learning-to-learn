@@ -2,6 +2,7 @@ import os
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
+import math
 from collections import deque
 
 import mock
@@ -14,13 +15,15 @@ from QuadraticFunction import QuadraticFunctionLayer
 
 
 class LearningToLearn():
-    def __init__(self, optimizer_network, objective_network_generator, objective_loss_fn, dataset, accumulate_losses = tf.add_n):
+    def __init__(self, optimizer_network, objective_network_generator, objective_loss_fn, dataset, evaluation_metric, accumulate_losses = tf.add_n):
         self.optimizer_network = optimizer_network
         self.objective_network_generator = objective_network_generator
         self.objective_loss_fn = objective_loss_fn
         self.objective_network_weights = {}
-        self.dataset_train = dataset.skip(10_000)
-        self.dataset_test = dataset.take(10_000)
+        dataset_length = len(list(dataset.as_numpy_iterator()))
+        self.dataset_train = dataset.skip(math.floor(dataset_length * 0.2))
+        self.dataset_test = dataset.take(math.floor(dataset_length * 0.2))
+        self.evaluation_metric = evaluation_metric
         self.accumulate_losses = accumulate_losses
 
     def clear_weights(self):
@@ -110,9 +113,9 @@ class LearningToLearn():
             self.clear_weights()
             with mock.patch.object(keras.layers.Layer, "add_weight", self.custom_add_weight()):
                 objective_network = self.objective_network_generator()
-            metric = keras.metrics.SparseCategoricalAccuracy()
-            self.evaluate_optimizer(objective_network, dataset_test, metric)
-            print("  Accuracy: ", metric.result().numpy())
+            self.evaluation_metric.reset_state()
+            self.evaluate_optimizer(objective_network, dataset_test)
+            print("  Accuracy: ", self.evaluation_metric.result().numpy())
             print("______________________________")
 
     def train_objective(self, objective_network, optimizer_optimizer, dataset, T = 16):
@@ -170,7 +173,7 @@ class LearningToLearn():
                     losses.clear()
                     tape.reset()
 
-    def evaluate_optimizer(self, objective_network, dataset, metric):
+    def evaluate_optimizer(self, objective_network, dataset):
         for step, (x, y) in dataset.enumerate().as_numpy_iterator():
             if not objective_network.built:
                 with mock.patch.object(keras.layers.Layer, "add_weight", self.custom_add_weight()):
@@ -184,7 +187,7 @@ class LearningToLearn():
 
                 loss = self.objective_loss_fn(y, outputs)
 
-            metric.update_state(y, outputs)
+            self.evaluation_metric.update_state(y, outputs)
 
             gradients = tape.gradient(loss, self.objective_network_weights)
             gradients, sizes_shapes, dict_structure = self.weights_to_1d_tensor(gradients)
@@ -194,23 +197,42 @@ class LearningToLearn():
 
             self.apply_weight_changes(optimizer_output)
 
+
+class QuadMetric():
+    def __init__(self):
+        self.last_loss = tf.zeros([1])
+
+    def reset_state(self):
+        self.last_loss = tf.zeros([1])
+
+    def update_state(self, inputs, outputs):
+        self.last_loss = outputs
+
+    def result(self):
+        return self.last_loss
+
 def main():
     tf.random.set_seed(1)
 
+    # Quadratic example
+    # dataset = tf.data.Dataset.from_tensor_slices(
+    #     (tf.zeros([400]), tf.zeros([400]))
+    # )
+    # objective_network_generator = lambda : QuadraticFunctionLayer(10)
+    # objective_loss_fn = lambda x, y: y
+    # evaluation_metric = QuadMetric()
+
+    # MNIST example
     (x_train, y_train), (x_test, y_test) = keras.datasets.mnist.load_data()
     dataset = tf.data.Dataset.from_tensor_slices(
         (x_train.reshape(60000, 28, 28, 1).astype("float32") / 255, y_train)
     )
-    # dataset = tf.data.Dataset.from_tensor_slices(
-    #     (tf.zeros([60000, 784]), tf.zeros([60000]))
-    # )
-
-    # objective_network_generator = lambda : QuadraticFunctionLayer(10)
     objective_network_generator = lambda : ConvNN()
-    # objective_loss_fn = lambda x, y: y
     objective_loss_fn = keras.losses.SparseCategoricalCrossentropy()
+    evaluation_metric = keras.metrics.SparseCategoricalAccuracy()
+
     optimizer_network = LSTMNetworkPerParameter()
-    ltl = LearningToLearn(optimizer_network, objective_network_generator, objective_loss_fn, dataset)
+    ltl = LearningToLearn(optimizer_network, objective_network_generator, objective_loss_fn, dataset, evaluation_metric)
     ltl.train_optimizer(100)
 
 if __name__ == "__main__":
