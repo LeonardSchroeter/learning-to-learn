@@ -115,8 +115,7 @@ class LearningToLearn():
                 objective_network = self.objective_network_generator()
             self.evaluation_metric.reset_state()
             self.evaluate_optimizer(objective_network, dataset_test)
-            print("  Accuracy: ", self.evaluation_metric.result().numpy())
-            print("______________________________")
+            print("  Accuracy: ", self.evaluation_metric.result().numpy(), end="\n\n")
 
     def train_objective(self, objective_network, optimizer_optimizer, dataset, T = 16):
         losses = deque(maxlen=T)
@@ -126,6 +125,11 @@ class LearningToLearn():
                 if not objective_network.built:
                     with mock.patch.object(keras.layers.Layer, "add_weight", self.custom_add_weight()):
                         building_output = objective_network(x)
+
+                # Seems to do the same as line below
+                # for layer_name in self.objective_network_weights:
+                #     for weight_name in self.objective_network_weights[layer_name]:
+                #         tape.watch(self.objective_network_weights[layer_name][weight_name])
 
                 tape.watch(self.objective_network_weights)
 
@@ -152,7 +156,6 @@ class LearningToLearn():
                 gradients = tf.stop_gradient(gradients)
 
                 optimizer_output = self.optimizer_network(gradients)
-
                 optimizer_output = self.tensor_1d_to_weights(optimizer_output, sizes_shapes, dict_structure)
 
                 self.apply_weight_changes(optimizer_output)
@@ -163,13 +166,13 @@ class LearningToLearn():
                         optimizer_gradients = tape.gradient(optimizer_loss, self.optimizer_network.trainable_weights)
 
                         # TODO Optimizer gradients are too small for ADAM to significantly change the optimizers weights
-                        new_grads = []
-                        for i in range(len(optimizer_gradients) - 2):
-                            new_grads.append(tf.math.scalar_mul(1e20, optimizer_gradients[i]))
-                        new_grads.append(optimizer_gradients[-2])
-                        new_grads.append(optimizer_gradients[-1])
+                        # new_grads = []
+                        # for i in range(len(optimizer_gradients) - 2):
+                        #     new_grads.append(tf.math.scalar_mul(1e20, optimizer_gradients[i]))
+                        # new_grads.append(optimizer_gradients[-2])
+                        # new_grads.append(optimizer_gradients[-1])
 
-                        optimizer_optimizer.apply_gradients(zip(new_grads, self.optimizer_network.trainable_weights))
+                        optimizer_optimizer.apply_gradients(zip(optimizer_gradients, self.optimizer_network.trainable_weights))
                     losses.clear()
                     tape.reset()
 
@@ -216,7 +219,7 @@ def main():
 
     # Quadratic example
     # dataset = tf.data.Dataset.from_tensor_slices(
-    #     (tf.zeros([400]), tf.zeros([400]))
+    #     (tf.zeros([2000]), tf.zeros([2000]))
     # )
     # objective_network_generator = lambda : QuadraticFunctionLayer(10)
     # objective_loss_fn = lambda x, y: y
