@@ -97,22 +97,23 @@ class LearningToLearn():
     def train_optimizer(self, epochs = 20):
         optimizer_optimizer = keras.optimizers.Adam()
 
+        self.optimizer_network.reset_states()
+        self.clear_weights()
+        with mock.patch.object(keras.layers.Layer, "add_weight", self.custom_add_weight()):
+            objective_network = self.objective_network_generator()
+        
         for epoch in range(1, epochs + 1):
             print("Epoch: ", epoch)
 
             dataset_train = self.dataset_train.shuffle(buffer_size=1024).batch(64)
             dataset_test = self.dataset_test.shuffle(buffer_size=1024).batch(64)
 
-            self.optimizer_network.reset_states()
-            self.clear_weights()
-            with mock.patch.object(keras.layers.Layer, "add_weight", self.custom_add_weight()):
-                objective_network = self.objective_network_generator()
             self.train_objective(objective_network, optimizer_optimizer, dataset_train)
 
-            self.optimizer_network.reset_states()
-            self.clear_weights()
-            with mock.patch.object(keras.layers.Layer, "add_weight", self.custom_add_weight()):
-                objective_network = self.objective_network_generator()
+            # self.optimizer_network.reset_states()
+            # self.clear_weights()
+            # with mock.patch.object(keras.layers.Layer, "add_weight", self.custom_add_weight()):
+            #     objective_network = self.objective_network_generator()
             self.evaluation_metric.reset_state()
             self.evaluate_optimizer(objective_network, dataset_test)
             print("  Accuracy: ", self.evaluation_metric.result().numpy(), end="\n\n")
@@ -126,52 +127,27 @@ class LearningToLearn():
                     with mock.patch.object(keras.layers.Layer, "add_weight", self.custom_add_weight()):
                         building_output = objective_network(x)
 
-                # Seems to do the same as line below
-                # for layer_name in self.objective_network_weights:
-                #     for weight_name in self.objective_network_weights[layer_name]:
-                #         tape.watch(self.objective_network_weights[layer_name][weight_name])
-
                 tape.watch(self.objective_network_weights)
 
                 with mock.patch.object(keras.layers.Layer, "__call__", self.custom_call()):
                     outputs = objective_network(x)
-
                 loss = self.objective_loss_fn(y, outputs)
-
                 losses.append(loss)
 
-                # TODO All outputs are zero after a small amount of steps, but the bias of the dense layer.
-                # Find out why this happends, this is likely the cause of the network not seeming to learn.
-                # There seems to be a dependency though, since they are 0 and not None
                 with tape.stop_recording():
                     gradients = tape.gradient(loss, self.objective_network_weights)
-
                 gradients, sizes_shapes, dict_structure = self.weights_to_1d_tensor(gradients)
-
-                # TODO Find out whether this line is needed.
-                # I think it doesn't, since computing the gradients inside stop_recording
-                # is enough to make the tape not track the gradients.
-                # Simple experiments of running the code with and without this line
-                # give the same results supporting this assumption.
                 gradients = tf.stop_gradient(gradients)
 
                 optimizer_output = self.optimizer_network(gradients)
                 optimizer_output = self.tensor_1d_to_weights(optimizer_output, sizes_shapes, dict_structure)
-
+                
                 self.apply_weight_changes(optimizer_output)
                 
                 if (step + 1) % T == 0:
                     optimizer_loss = self.accumulate_losses(losses)
                     with tape.stop_recording():
                         optimizer_gradients = tape.gradient(optimizer_loss, self.optimizer_network.trainable_weights)
-
-                        # TODO Optimizer gradients are too small for ADAM to significantly change the optimizers weights
-                        # new_grads = []
-                        # for i in range(len(optimizer_gradients) - 2):
-                        #     new_grads.append(tf.math.scalar_mul(1e20, optimizer_gradients[i]))
-                        # new_grads.append(optimizer_gradients[-2])
-                        # new_grads.append(optimizer_gradients[-1])
-
                         optimizer_optimizer.apply_gradients(zip(optimizer_gradients, self.optimizer_network.trainable_weights))
                     losses.clear()
                     tape.reset()
