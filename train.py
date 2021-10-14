@@ -12,19 +12,46 @@ from tensorflow import keras
 from examples import ConvNN
 from optimizer_network import LSTMNetworkPerParameter
 from QuadraticFunction import QuadraticFunctionLayer
+from util import Util
 
 
 class LearningToLearn():
-    def __init__(self, optimizer_network, objective_network_generator, objective_loss_fn, dataset, evaluation_metric, accumulate_losses = tf.add_n):
-        self.optimizer_network = optimizer_network
-        self.objective_network_generator = objective_network_generator
-        self.objective_loss_fn = objective_loss_fn
+    def __init__(self, config):
+        def add_attr(name, default):
+            if name in config:
+                setattr(self, name, config[name])
+            else:
+                if default is None:
+                    raise Exception(f"Config need to have property of name: {name}")
+                else:
+                    setattr(self, name, default)
+
+        if "evaluation_size" in config:
+            evaluation_size = config["evaluation_size"]
+        else: evaluation_size = 0.2
+
+        if "dataset" in config:
+            dataset_length = len(list(config["dataset"].as_numpy_iterator()))
+
+            self.dataset_train = config["dataset"].skip(math.floor(dataset_length * evaluation_size))
+            self.dataset_test = config["dataset"].take(math.floor(dataset_length * evaluation_size))
+        else: raise Exception("Config needs to have a dataset!")
+
+        add_attr("batch_size", 64)
+        add_attr("optimizer_network", None)
+        add_attr("train_optimizer_steps", 16)
+        add_attr("objective_network_generator", None)
+        add_attr("objective_loss_fn", None)
+        add_attr("evaluation_metric", None)
+        add_attr("super_epochs", 1)
+        add_attr("epochs", 32)
+        add_attr("save_every_n_epoch", 0)
+        add_attr("evaluate_every_n_epoch", 0)
+        add_attr("accumulate_losses", tf.add_n)
+        add_attr("optimizer_optimizer", keras.optimizers.Adam())
+
+        self.util = Util()
         self.objective_network_weights = {}
-        dataset_length = len(list(dataset.as_numpy_iterator()))
-        self.dataset_train = dataset.skip(math.floor(dataset_length * 0.2))
-        self.dataset_test = dataset.take(math.floor(dataset_length * 0.2))
-        self.evaluation_metric = evaluation_metric
-        self.accumulate_losses = accumulate_losses
 
     def clear_weights(self):
         self.objective_network_weights = {}
@@ -33,34 +60,6 @@ class LearningToLearn():
         for layer_name in self.objective_network_weights.keys():
             for weight_name in self.objective_network_weights[layer_name].keys():
                 self.objective_network_weights[layer_name][weight_name] = self.objective_network_weights[layer_name][weight_name] + g_t[layer_name][weight_name]
-
-    def weights_to_1d_tensor(self, weight_dict):
-        sizes_shapes = []
-        weights_1d = []
-        dict_structure = {}
-        for layer_name, layer_weights in weight_dict.items():
-            dict_structure[layer_name] = {}
-            for weight_name, weights in layer_weights.items():
-                dict_structure[layer_name][weight_name] = None
-                size = tf.size(weights).numpy()
-                shape = tf.shape(weights).numpy()
-                sizes_shapes.append((size, shape))
-                weights_1d.append(tf.reshape(weights, size))
-        all_weights_1d = tf.concat(weights_1d, 0)
-        return all_weights_1d, sizes_shapes, dict_structure
-
-    def tensor_1d_to_weights(self, tensor_1d, sizes_shapes, dict_structure):
-        result_dict = dict_structure
-        sizes, shapes = zip(*sizes_shapes)
-        sizes, shapes = list(sizes), list(shapes)
-        tensors_split = tf.split(tensor_1d, sizes, 0)
-        tensors = [tf.reshape(tensor, shape) for tensor, shape in zip(tensors_split, shapes)]
-        i = 0
-        for layer_name in result_dict.keys():
-            for weight_name in result_dict[layer_name].keys():
-                result_dict[layer_name][weight_name] = tensors[i]
-                i += 1
-        return result_dict
 
     def custom_getter(self, layer_name):
         def _custom_getter(name, **kwargs):
@@ -94,32 +93,35 @@ class LearningToLearn():
             return original_call(other, *args, **kwargs)
         return _custom_call
 
-    def train_optimizer(self, epochs = 20):
-        optimizer_optimizer = keras.optimizers.Adam()
-
-        self.optimizer_network.reset_states()
-        self.clear_weights()
+    def new_objective(self):
         with mock.patch.object(keras.layers.Layer, "add_weight", self.custom_add_weight()):
             objective_network = self.objective_network_generator()
-        
-        for epoch in range(1, epochs + 1):
-            print("Epoch: ", epoch)
+        return objective_network
 
-            dataset_train = self.dataset_train.shuffle(buffer_size=1024).batch(64)
-            dataset_test = self.dataset_test.shuffle(buffer_size=1024).batch(64)
+    def train_optimizer(self):
+        for super_epoch in range(1, self.super_epochs + 1):
+            print("Starting training of fresh objective: ", super_epoch)
 
-            self.train_objective(objective_network, optimizer_optimizer, dataset_train)
+            self.optimizer_network.reset_states()
+            self.clear_weights()
+            
+            objective_network = self.new_objective()
 
-            # self.optimizer_network.reset_states()
-            # self.clear_weights()
-            # with mock.patch.object(keras.layers.Layer, "add_weight", self.custom_add_weight()):
-            #     objective_network = self.objective_network_generator()
-            self.evaluation_metric.reset_state()
-            self.evaluate_optimizer(objective_network, dataset_test)
-            print("  Accuracy: ", self.evaluation_metric.result().numpy(), end="\n\n")
+            for epoch in range(1, self.epochs + 1):
+                print("Epoch: ", epoch)
 
-    def train_objective(self, objective_network, optimizer_optimizer, dataset, T = 16):
-        losses = deque(maxlen=T)
+                dataset_train = self.dataset_train.shuffle(buffer_size=1024).batch(self.batch_size)
+                dataset_test = self.dataset_test.shuffle(buffer_size=1024).batch(self.batch_size)
+
+                self.train_objective(objective_network, dataset_train)
+                
+                if epoch % self.evaluate_every_n_epoch == 0:
+                    self.evaluation_metric.reset_state()
+                    self.evaluate_objective(objective_network, dataset_test)
+                    print("  Accuracy: ", self.evaluation_metric.result().numpy())
+
+    def train_objective(self, objective_network, dataset):
+        losses = deque(maxlen=self.train_optimizer_steps)
 
         with tf.GradientTape(persistent=True) as tape:
             for step, (x, y) in dataset.enumerate().as_numpy_iterator():
@@ -136,46 +138,31 @@ class LearningToLearn():
 
                 with tape.stop_recording():
                     gradients = tape.gradient(loss, self.objective_network_weights)
-                gradients, sizes_shapes, dict_structure = self.weights_to_1d_tensor(gradients)
+                gradients = self.util.to_1d(gradients)
                 gradients = tf.stop_gradient(gradients)
 
                 optimizer_output = self.optimizer_network(gradients)
-                optimizer_output = self.tensor_1d_to_weights(optimizer_output, sizes_shapes, dict_structure)
+                optimizer_output = self.util.from_1d(optimizer_output)
                 
                 self.apply_weight_changes(optimizer_output)
                 
-                if (step + 1) % T == 0:
+                if (step + 1) % self.train_optimizer_steps == 0:
                     optimizer_loss = self.accumulate_losses(losses)
                     with tape.stop_recording():
                         optimizer_gradients = tape.gradient(optimizer_loss, self.optimizer_network.trainable_weights)
-                        optimizer_optimizer.apply_gradients(zip(optimizer_gradients, self.optimizer_network.trainable_weights))
+                        self.optimizer_optimizer.apply_gradients(zip(optimizer_gradients, self.optimizer_network.trainable_weights))
                     losses.clear()
                     tape.reset()
 
-    def evaluate_optimizer(self, objective_network, dataset):
+    def evaluate_objective(self, objective_network, dataset):
         for step, (x, y) in dataset.enumerate().as_numpy_iterator():
             if not objective_network.built:
                 with mock.patch.object(keras.layers.Layer, "add_weight", self.custom_add_weight()):
                     building_output = objective_network(x)
             
-            with tf.GradientTape(persistent=True) as tape:
-                tape.watch(self.objective_network_weights)
-
-                with mock.patch.object(keras.layers.Layer, "__call__", self.custom_call()):
-                    outputs = objective_network(x)
-
-                loss = self.objective_loss_fn(y, outputs)
+            outputs = objective_network(x)
 
             self.evaluation_metric.update_state(y, outputs)
-
-            gradients = tape.gradient(loss, self.objective_network_weights)
-            gradients, sizes_shapes, dict_structure = self.weights_to_1d_tensor(gradients)
-
-            optimizer_output = self.optimizer_network(gradients)
-            optimizer_output = self.tensor_1d_to_weights(optimizer_output, sizes_shapes, dict_structure)
-
-            self.apply_weight_changes(optimizer_output)
-
 
 class QuadMetric():
     def __init__(self):
@@ -206,13 +193,45 @@ def main():
     dataset = tf.data.Dataset.from_tensor_slices(
         (x_train.reshape(60000, 28, 28, 1).astype("float32") / 255, y_train)
     )
-    objective_network_generator = lambda : ConvNN()
-    objective_loss_fn = keras.losses.SparseCategoricalCrossentropy()
-    evaluation_metric = keras.metrics.SparseCategoricalAccuracy()
 
-    optimizer_network = LSTMNetworkPerParameter()
-    ltl = LearningToLearn(optimizer_network, objective_network_generator, objective_loss_fn, dataset, evaluation_metric)
-    ltl.train_optimizer(100)
+    # There happens an error after 20 epochs with this config
+    # config = {
+    #     "dataset": dataset,
+    #     "batch_size": 64,
+    #     "evaluation_size": 0.2,
+    #     "optimizer_network": LSTMNetworkPerParameter(),
+    #     "optimizer_optimizer": keras.optimizers.Adam(),
+    #     "train_optimizer_steps": 16,
+    #     "objective_network_generator": lambda : ConvNN(),
+    #     "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
+    #     "accumulate_losses": tf.add_n,
+    #     "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
+    #     "super_epochs": 1,
+    #     "epochs": 100,
+    #     "save_every_n_epoch": 5,
+    #     "evaluate_every_n_epoch": 1,
+    # }
+
+    config = {
+        "dataset": dataset,
+        "batch_size": 64,
+        "evaluation_size": 0.2,
+        "optimizer_network": LSTMNetworkPerParameter(),
+        "optimizer_optimizer": keras.optimizers.Adam(),
+        "train_optimizer_steps": 16,
+        "objective_network_generator": lambda : ConvNN(),
+        "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
+        "accumulate_losses": tf.add_n,
+        "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
+        "super_epochs": 10,
+        "epochs": 10,
+        "save_every_n_epoch": 5,
+        "evaluate_every_n_epoch": 1,
+    }
+
+    ltl = LearningToLearn(config)
+    ltl.train_optimizer()
+
 
 if __name__ == "__main__":
     main()

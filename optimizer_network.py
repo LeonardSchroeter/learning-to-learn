@@ -2,7 +2,7 @@ import tensorflow as tf
 from tensorflow import keras
 
 
-class LSTMNetworkPerParameter(keras.layers.Layer):
+class LSTMNetworkPerParameter(keras.Model):
     def __init__(self, **kwargs):
         super(LSTMNetworkPerParameter, self).__init__(**kwargs)
         self.lstm1 = keras.layers.LSTM(20, stateful=True, return_sequences=True)
