@@ -45,13 +45,28 @@ class LearningToLearn():
         add_attr("evaluation_metric", None)
         add_attr("super_epochs", 1)
         add_attr("epochs", 32)
-        add_attr("save_every_n_epoch", 0)
-        add_attr("evaluate_every_n_epoch", 0)
+        add_attr("save_every_n_epoch", 1)
+        add_attr("evaluate_every_n_epoch", 1)
         add_attr("accumulate_losses", tf.add_n)
         add_attr("optimizer_optimizer", keras.optimizers.Adam())
+        add_attr("config_name", None)
+        add_attr("load_weights", False)
 
         self.util = Util()
         self.objective_network_weights = {}
+
+        if self.load_weights:
+            self.optimizer_network.load_weights(self.get_checkpoint_path(1, 30))
+
+    def get_checkpoint_path(self, super_epoch = 0, epoch = 0, alternative = None):
+        dirname = os.path.dirname(__file__)
+        if alternative:
+            filename = alternative
+        else:
+            filename = f"{super_epoch}_{epoch}"
+        relative_path = f"checkpoints\{self.config_name}\{filename}"
+        path = os.path.join(dirname, relative_path)
+        return path
 
     def clear_weights(self):
         self.objective_network_weights = {}
@@ -93,7 +108,10 @@ class LearningToLearn():
             return original_call(other, *args, **kwargs)
         return _custom_call
 
-    def new_objective(self):
+    def new_objective(self, learned_optimizer = False):
+        if not learned_optimizer:
+            return self.objective_network_generator()
+
         with mock.patch.object(keras.layers.Layer, "add_weight", self.custom_add_weight()):
             objective_network = self.objective_network_generator()
         return objective_network
@@ -105,7 +123,7 @@ class LearningToLearn():
             self.optimizer_network.reset_states()
             self.clear_weights()
             
-            objective_network = self.new_objective()
+            objective_network = self.new_objective(learned_optimizer=True)
 
             for epoch in range(1, self.epochs + 1):
                 print("Epoch: ", epoch)
@@ -116,9 +134,12 @@ class LearningToLearn():
                 self.train_objective(objective_network, dataset_train)
                 
                 if epoch % self.evaluate_every_n_epoch == 0:
-                    self.evaluation_metric.reset_state()
                     self.evaluate_objective(objective_network, dataset_test)
-                    print("  Accuracy: ", self.evaluation_metric.result().numpy())
+
+                if epoch % self.save_every_n_epoch == 0:
+                    self.optimizer_network.save_weights(self.get_checkpoint_path(super_epoch, epoch))
+
+        self.optimizer_network.save_weights(self.get_checkpoint_path(alternative="result"))
 
     def train_objective(self, objective_network, dataset):
         losses = deque(maxlen=self.train_optimizer_steps)
@@ -155,15 +176,66 @@ class LearningToLearn():
                     tape.reset()
 
     def evaluate_objective(self, objective_network, dataset):
+        self.evaluation_metric.reset_state()
         for step, (x, y) in dataset.enumerate().as_numpy_iterator():
-            if not objective_network.built:
-                with mock.patch.object(keras.layers.Layer, "add_weight", self.custom_add_weight()):
-                    building_output = objective_network(x)
-            
             outputs = objective_network(x)
-
             self.evaluation_metric.update_state(y, outputs)
+        print("  Accuracy: ", self.evaluation_metric.result().numpy())
+    
+    def evaluate_optimizer(self):
+        self.optimizer_network.reset_states()
+        self.clear_weights()
+        
+        objective_network = self.new_objective(learned_optimizer=True)
+        # obj_sgd = self.new_objective()
+        # obj_adam = self.new_objective()
 
+        for epoch in range(1, self.epochs + 1):
+            print("Epoch: ", epoch)
+
+            dataset_train = self.dataset_train.shuffle(buffer_size=1024).batch(self.batch_size)
+            dataset_test = self.dataset_test.shuffle(buffer_size=1024).batch(self.batch_size)
+
+            self.train_objective_no_optimizer(objective_network, dataset_train)
+            # self.train_compare(obj_sgd, dataset_train, tf.keras.optimizers.SGD())
+            # self.train_compare(obj_adam, dataset_train, tf.keras.optimizers.Adam())
+            
+            if epoch % self.evaluate_every_n_epoch == 0:
+                self.evaluate_objective(objective_network, dataset_test)
+                # self.evaluate_objective(obj_sgd, dataset_test)
+                # self.evaluate_objective(obj_adam, dataset_test)
+
+    def train_objective_no_optimizer(self, objective_network, dataset):
+        for step, (x, y) in dataset.enumerate().as_numpy_iterator():
+            with tf.GradientTape() as tape:
+                if not objective_network.built:
+                    with mock.patch.object(keras.layers.Layer, "add_weight", self.custom_add_weight()):
+                        building_output = objective_network(x)
+
+                tape.watch(self.objective_network_weights)
+
+                with mock.patch.object(keras.layers.Layer, "__call__", self.custom_call()):
+                    outputs = objective_network(x)
+                loss = self.objective_loss_fn(y, outputs)
+
+            gradients = tape.gradient(loss, self.objective_network_weights)
+            gradients = self.util.to_1d(gradients)
+
+            optimizer_output = self.optimizer_network(gradients)
+            optimizer_output = self.util.from_1d(optimizer_output)
+            
+            self.apply_weight_changes(optimizer_output)
+
+    def train_compare(self, objective_network, dataset, optimizer):
+        for step, (x, y) in dataset.enumerate().as_numpy_iterator():
+            with tf.GradientTape() as tape:
+                outputs = objective_network(x)
+                loss = self.objective_loss_fn(y, outputs)
+
+            gradients = tape.gradient(loss, objective_network.trainable_weights)
+            optimizer.apply_gradients(zip(gradients, objective_network.trainable_weights))
+
+            
 class QuadMetric():
     def __init__(self):
         self.last_loss = tf.zeros([1])
@@ -194,42 +266,45 @@ def main():
         (x_train.reshape(60000, 28, 28, 1).astype("float32") / 255, y_train)
     )
 
-    # There happens an error after 20 epochs with this config
-    # config = {
-    #     "dataset": dataset,
-    #     "batch_size": 64,
-    #     "evaluation_size": 0.2,
-    #     "optimizer_network": LSTMNetworkPerParameter(),
-    #     "optimizer_optimizer": keras.optimizers.Adam(),
-    #     "train_optimizer_steps": 16,
-    #     "objective_network_generator": lambda : ConvNN(),
-    #     "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
-    #     "accumulate_losses": tf.add_n,
-    #     "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
-    #     "super_epochs": 1,
-    #     "epochs": 100,
-    #     "save_every_n_epoch": 5,
-    #     "evaluate_every_n_epoch": 1,
-    # }
-
     config = {
+        "config_name": "test1",
         "dataset": dataset,
         "batch_size": 64,
         "evaluation_size": 0.2,
-        "optimizer_network": LSTMNetworkPerParameter(),
+        "optimizer_network": LSTMNetworkPerParameter(0.01),
         "optimizer_optimizer": keras.optimizers.Adam(),
         "train_optimizer_steps": 16,
         "objective_network_generator": lambda : ConvNN(),
         "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
         "accumulate_losses": tf.add_n,
         "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
-        "super_epochs": 10,
-        "epochs": 10,
+        "super_epochs": 1,
+        "epochs": 1000,
         "save_every_n_epoch": 5,
         "evaluate_every_n_epoch": 1,
+        "load_weights": False,
     }
 
+    # config = {
+    #     "config_name": "test2",
+    #     "dataset": dataset,
+    #     "batch_size": 64,
+    #     "evaluation_size": 0.2,
+    #     "optimizer_network": LSTMNetworkPerParameter(0.01),
+    #     "optimizer_optimizer": keras.optimizers.Adam(),
+    #     "train_optimizer_steps": 16,
+    #     "objective_network_generator": lambda: ConvNN(),
+    #     "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
+    #     "accumulate_losses": tf.add_n,
+    #     "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
+    #     "super_epochs": 10,
+    #     "epochs": 10,
+    #     "save_every_n_epoch": 1,
+    #     "evaluate_every_n_epoch": 1,
+    # }
+
     ltl = LearningToLearn(config)
+    # ltl.train_optimizer()
     ltl.train_optimizer()
 
 
