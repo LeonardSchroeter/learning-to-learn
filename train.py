@@ -51,12 +51,13 @@ class LearningToLearn():
         add_attr("optimizer_optimizer", keras.optimizers.Adam())
         add_attr("config_name", None)
         add_attr("load_weights", False)
+        add_attr("load_path", "result")
 
         self.util = Util()
         self.objective_network_weights = {}
 
         if self.load_weights:
-            self.optimizer_network.load_weights(self.get_checkpoint_path(1, 30))
+            self.optimizer_network.load_weights(self.get_checkpoint_path(alternative=self.load_path))
 
     def get_checkpoint_path(self, super_epoch = 0, epoch = 0, alternative = None):
         dirname = os.path.dirname(__file__)
@@ -271,18 +272,19 @@ def main():
         "dataset": dataset,
         "batch_size": 64,
         "evaluation_size": 0.2,
-        "optimizer_network": LSTMNetworkPerParameter(0.01),
+        "optimizer_network": LSTMNetworkPerParameter(0.1),
         "optimizer_optimizer": keras.optimizers.Adam(),
         "train_optimizer_steps": 16,
         "objective_network_generator": lambda : ConvNN(),
         "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
         "accumulate_losses": tf.add_n,
         "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
-        "super_epochs": 1,
-        "epochs": 1000,
+        "super_epochs": 5,
+        "epochs": 5,
         "save_every_n_epoch": 5,
         "evaluate_every_n_epoch": 1,
         "load_weights": False,
+        "load_path": None,
     }
 
     # config = {
