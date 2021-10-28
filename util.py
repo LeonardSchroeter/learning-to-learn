@@ -44,6 +44,8 @@ class Util():
                 i += 1
         return result_dict
 
+    # Runtime of this is way to high to use in training
+    # Possible solution: implement using only tf functions
     def preprocess_gradients(self, gradients, p):
         def scale(parameter):
             value = parameter.numpy()

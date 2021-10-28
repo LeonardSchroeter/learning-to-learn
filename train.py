@@ -22,7 +22,7 @@ class LearningToLearn():
                 setattr(self, name, config[name])
             else:
                 if default is None:
-                    raise Exception(f"Config need to have property of name: {name}")
+                    raise Exception(f"Config needs to have property of name: {name}")
                 else:
                     setattr(self, name, default)
 
@@ -52,6 +52,7 @@ class LearningToLearn():
         add_attr("config_name", None)
         add_attr("load_weights", False)
         add_attr("load_path", "result")
+        add_attr("comparison_optimizers", [])
 
         self.util = Util()
         self.objective_network_weights = {}
@@ -118,8 +119,10 @@ class LearningToLearn():
         return objective_network
 
     def train_optimizer(self):
+        print("Train optimizer")
+
         for super_epoch in range(1, self.super_epochs + 1):
-            print("Starting training of fresh objective: ", super_epoch)
+            print("Super epoch: ", super_epoch)
 
             self.optimizer_network.reset_states()
             self.clear_weights()
@@ -132,7 +135,7 @@ class LearningToLearn():
                 dataset_train = self.dataset_train.shuffle(buffer_size=1024).batch(self.batch_size)
                 dataset_test = self.dataset_test.shuffle(buffer_size=1024).batch(self.batch_size)
 
-                self.train_objective(objective_network, dataset_train)
+                self.train_objective(objective_network, dataset_train, True)
                 
                 if epoch % self.evaluate_every_n_epoch == 0:
                     self.evaluate_objective(objective_network, dataset_test)
@@ -142,7 +145,7 @@ class LearningToLearn():
 
         self.optimizer_network.save_weights(self.get_checkpoint_path(alternative="result"))
 
-    def train_objective(self, objective_network, dataset):
+    def train_objective(self, objective_network, dataset, train_optimizer = False):
         losses = deque(maxlen=self.train_optimizer_steps)
 
         with tf.GradientTape(persistent=True) as tape:
@@ -160,15 +163,19 @@ class LearningToLearn():
 
                 with tape.stop_recording():
                     gradients = tape.gradient(loss, self.objective_network_weights)
-                gradients = self.util.to_1d(gradients)
+                    gradients = self.util.to_1d(gradients)
+                    # gradients = self.util.preprocess_gradients(gradients, 10)
                 gradients = tf.stop_gradient(gradients)
-
+                
                 optimizer_output = self.optimizer_network(gradients)
                 optimizer_output = self.util.from_1d(optimizer_output)
                 
                 self.apply_weight_changes(optimizer_output)
                 
-                if (step + 1) % self.train_optimizer_steps == 0:
+                if not train_optimizer:
+                    losses.clear()
+                    tape.reset()
+                elif (step + 1) % self.train_optimizer_steps == 0:
                     optimizer_loss = self.accumulate_losses(losses)
                     with tape.stop_recording():
                         optimizer_gradients = tape.gradient(optimizer_loss, self.optimizer_network.trainable_weights)
@@ -184,12 +191,13 @@ class LearningToLearn():
         print("  Accuracy: ", self.evaluation_metric.result().numpy())
     
     def evaluate_optimizer(self):
+        print("Evaluate optimizer")
+
         self.optimizer_network.reset_states()
         self.clear_weights()
         
         objective_network = self.new_objective(learned_optimizer=True)
-        # obj_sgd = self.new_objective()
-        # obj_adam = self.new_objective()
+        comparison_objectives = [self.new_objective() for opt in self.comparison_optimizers]
 
         for epoch in range(1, self.epochs + 1):
             print("Epoch: ", epoch)
@@ -197,37 +205,16 @@ class LearningToLearn():
             dataset_train = self.dataset_train.shuffle(buffer_size=1024).batch(self.batch_size)
             dataset_test = self.dataset_test.shuffle(buffer_size=1024).batch(self.batch_size)
 
-            self.train_objective_no_optimizer(objective_network, dataset_train)
-            # self.train_compare(obj_sgd, dataset_train, tf.keras.optimizers.SGD())
-            # self.train_compare(obj_adam, dataset_train, tf.keras.optimizers.Adam())
+            self.train_objective(objective_network, dataset_train)
+            for objective, optimizer in zip(comparison_objectives, self.comparison_optimizers):
+                self.train_compare(objective, optimizer, dataset_train)
             
             if epoch % self.evaluate_every_n_epoch == 0:
                 self.evaluate_objective(objective_network, dataset_test)
-                # self.evaluate_objective(obj_sgd, dataset_test)
-                # self.evaluate_objective(obj_adam, dataset_test)
+                for objective in comparison_objectives:
+                    self.evaluate_objective(objective, dataset_test)
 
-    def train_objective_no_optimizer(self, objective_network, dataset):
-        for step, (x, y) in dataset.enumerate().as_numpy_iterator():
-            with tf.GradientTape() as tape:
-                if not objective_network.built:
-                    with mock.patch.object(keras.layers.Layer, "add_weight", self.custom_add_weight()):
-                        building_output = objective_network(x)
-
-                tape.watch(self.objective_network_weights)
-
-                with mock.patch.object(keras.layers.Layer, "__call__", self.custom_call()):
-                    outputs = objective_network(x)
-                loss = self.objective_loss_fn(y, outputs)
-
-            gradients = tape.gradient(loss, self.objective_network_weights)
-            gradients = self.util.to_1d(gradients)
-
-            optimizer_output = self.optimizer_network(gradients)
-            optimizer_output = self.util.from_1d(optimizer_output)
-            
-            self.apply_weight_changes(optimizer_output)
-
-    def train_compare(self, objective_network, dataset, optimizer):
+    def train_compare(self, objective_network, optimizer, dataset):
         for step, (x, y) in dataset.enumerate().as_numpy_iterator():
             with tf.GradientTape() as tape:
                 outputs = objective_network(x)
@@ -279,12 +266,9 @@ def main():
         "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
         "accumulate_losses": tf.add_n,
         "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
-        "super_epochs": 5,
-        "epochs": 5,
-        "save_every_n_epoch": 5,
-        "evaluate_every_n_epoch": 1,
-        "load_weights": False,
-        "load_path": None,
+        "super_epochs": 1,
+        "epochs": 1,
+        "comparison_optimizers": [tf.keras.optimizers.Adam()],
     }
 
     # config = {
@@ -306,8 +290,8 @@ def main():
     # }
 
     ltl = LearningToLearn(config)
-    # ltl.train_optimizer()
     ltl.train_optimizer()
+    ltl.evaluate_optimizer()
 
 
 if __name__ == "__main__":
