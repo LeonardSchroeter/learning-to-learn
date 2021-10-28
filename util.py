@@ -1,3 +1,6 @@
+import math
+import time
+
 import tensorflow as tf
 
 
@@ -40,3 +43,24 @@ class Util():
                 result_dict[layer_name][weight_name] = tensors[i]
                 i += 1
         return result_dict
+
+    def preprocess_gradients(self, gradients, p):
+        def scale(parameter):
+            value = parameter.numpy()
+            if value >= math.e ** -p:
+                res = tf.math.log(parameter) / tf.constant(p, dtype=tf.float32)
+            elif value <= -math.e ** -p:
+                res = tf.math.log(tf.constant(-1, dtype=tf.float32) * parameter) / tf.constant(p, dtype=tf.float32)
+            else:
+                res = tf.constant(-math.e ** p) * parameter
+            return res
+        return tf.map_fn(scale, gradients)
+
+if __name__ == "__main__":
+    util = Util()
+
+    grads = tf.constant([-1e-4])
+    print(grads.numpy())
+    grads = util.preprocess_gradients(grads, 10)
+    print(grads.numpy())
+    
