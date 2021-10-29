@@ -131,13 +131,16 @@ class LearningToLearn():
             
             objective_network = self.new_objective(learned_optimizer=True)
 
+            steps_left = self.max_steps_per_super_epoch
+
             for epoch in range(1, self.epochs + 1):
                 print("Epoch: ", epoch)
 
                 dataset_train = self.dataset_train.shuffle(buffer_size=1024).batch(self.batch_size)
                 dataset_test = self.dataset_test.shuffle(buffer_size=1024).batch(self.batch_size)
 
-                self.train_objective(objective_network, dataset_train, True)
+                steps_taken = self.train_objective(objective_network, dataset_train, steps_left, True)
+                steps_left = steps_left - steps_taken
                 
                 if epoch % self.evaluate_every_n_epoch == 0:
                     self.evaluate_objective(objective_network, dataset_test)
@@ -145,9 +148,12 @@ class LearningToLearn():
                 if epoch % self.save_every_n_epoch == 0:
                     self.optimizer_network.save_weights(self.get_checkpoint_path(super_epoch, epoch))
 
+                if steps_left == 0:
+                    break
+
         self.optimizer_network.save_weights(self.get_checkpoint_path(alternative="result"))
 
-    def train_objective(self, objective_network, dataset, train_optimizer = False):
+    def train_objective(self, objective_network, dataset, max_steps_left = math.inf, train_optimizer = False):
         losses = deque(maxlen=self.train_optimizer_steps)
 
         with tf.GradientTape(persistent=True) as tape:
@@ -192,6 +198,11 @@ class LearningToLearn():
                     losses.clear()
                     tape.reset()
 
+                if step + 1 == max_steps_left:
+                    break
+        
+        return step + 1
+
     def evaluate_objective(self, objective_network, dataset):
         self.evaluation_metric.reset_state()
         for step, (x, y) in dataset.enumerate().as_numpy_iterator():
@@ -208,22 +219,27 @@ class LearningToLearn():
         objective_network = self.new_objective(learned_optimizer=True)
         comparison_objectives = [self.new_objective() for opt in self.comparison_optimizers]
 
+        steps_left = self.max_steps_per_super_epoch
+
         for epoch in range(1, self.epochs + 1):
             print("Epoch: ", epoch)
 
             dataset_train = self.dataset_train.shuffle(buffer_size=1024).batch(self.batch_size)
             dataset_test = self.dataset_test.shuffle(buffer_size=1024).batch(self.batch_size)
 
-            self.train_objective(objective_network, dataset_train)
+            steps_taken = self.train_objective(objective_network, dataset_train, steps_left)
             for objective, optimizer in zip(comparison_objectives, self.comparison_optimizers):
-                self.train_compare(objective, optimizer, dataset_train)
+                self.train_compare(objective, optimizer, dataset_train, steps_left)
+            steps_left = steps_left - steps_taken
             
             if epoch % self.evaluate_every_n_epoch == 0:
                 self.evaluate_objective(objective_network, dataset_test)
                 for objective in comparison_objectives:
                     self.evaluate_objective(objective, dataset_test)
+            if steps_left == 0:
+                break
 
-    def train_compare(self, objective_network, optimizer, dataset):
+    def train_compare(self, objective_network, optimizer, dataset, max_steps_left):
         for step, (x, y) in dataset.enumerate().as_numpy_iterator():
             with tf.GradientTape() as tape:
                 outputs = objective_network(x)
@@ -232,7 +248,9 @@ class LearningToLearn():
             gradients = tape.gradient(loss, objective_network.trainable_weights)
             optimizer.apply_gradients(zip(gradients, objective_network.trainable_weights))
 
-            
+            if step + 1 == max_steps_left:
+                break
+        
 class QuadMetric():
     def __init__(self):
         self.last_loss = tf.zeros([1])
@@ -266,18 +284,18 @@ def main():
     config = {
         "config_name": "test2",
         "dataset": dataset,
-        "batch_size": 64,
+        "batch_size": 128,
         "evaluation_size": 0.2,
         "optimizer_network": LSTMNetworkPerParameter(0.1),
         "optimizer_optimizer": keras.optimizers.Adam(),
-        "train_optimizer_steps": 16,
-        "train_optimizer_every_step": True,
+        "train_optimizer_steps": 20,
+        "train_optimizer_every_step": False,
         "objective_network_generator": lambda : ConvNN(),
         "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
         "accumulate_losses": tf.add_n,
         "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
-        "super_epochs": 25,
-        "epochs": 5,
+        "super_epochs": 128,
+        "epochs": 1,
         "comparison_optimizers": [tf.keras.optimizers.Adam()],
         "max_steps_per_super_epoch": 100,
     }
