@@ -176,7 +176,7 @@ class LearningToLearn():
                     gradients = self.util.to_1d(gradients)
                     # gradients = self.util.preprocess_gradients(gradients, 10)
                 gradients = tf.stop_gradient(gradients)
-                
+
                 optimizer_output = self.optimizer_network(gradients)
                 optimizer_output = self.util.from_1d(optimizer_output)
                 
@@ -256,8 +256,9 @@ class LearningToLearn():
     def pretraining(self, steps):
         print(f"Pretrain for {steps} steps")
 
-        inputs = tf.random.normal([steps])
-        outputs = -.001 * inputs
+        # need low stddev, because values need to be similar to inputs in later training
+        inputs = tf.random.normal([steps], stddev=0.01)
+        outputs = inputs * -0.01
 
         dataset = tf.data.Dataset.from_tensor_slices(
             (inputs, outputs)
