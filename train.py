@@ -53,6 +53,8 @@ class LearningToLearn():
         add_attr("load_weights", False)
         add_attr("load_path", "result")
         add_attr("comparison_optimizers", [])
+        add_attr("max_steps_per_super_epoch", math.inf)
+        add_attr("train_optimizer_every_step", False)
 
         self.util = Util()
         self.objective_network_weights = {}
@@ -172,9 +174,16 @@ class LearningToLearn():
                 
                 self.apply_weight_changes(optimizer_output)
                 
-                if not train_optimizer:
+                if step == 0:
+                    continue
+                elif not train_optimizer:
                     losses.clear()
                     tape.reset()
+                elif self.train_optimizer_every_step:
+                    optimizer_loss = self.accumulate_losses(losses)
+                    with tape.stop_recording():
+                        optimizer_gradients = tape.gradient(optimizer_loss, self.optimizer_network.trainable_weights)
+                        self.optimizer_optimizer.apply_gradients(zip(optimizer_gradients, self.optimizer_network.trainable_weights))
                 elif (step + 1) % self.train_optimizer_steps == 0:
                     optimizer_loss = self.accumulate_losses(losses)
                     with tape.stop_recording():
@@ -255,20 +264,22 @@ def main():
     )
 
     config = {
-        "config_name": "test1",
+        "config_name": "test2",
         "dataset": dataset,
         "batch_size": 64,
         "evaluation_size": 0.2,
         "optimizer_network": LSTMNetworkPerParameter(0.1),
         "optimizer_optimizer": keras.optimizers.Adam(),
         "train_optimizer_steps": 16,
+        "train_optimizer_every_step": True,
         "objective_network_generator": lambda : ConvNN(),
         "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
         "accumulate_losses": tf.add_n,
         "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
-        "super_epochs": 1,
-        "epochs": 1,
+        "super_epochs": 25,
+        "epochs": 5,
         "comparison_optimizers": [tf.keras.optimizers.Adam()],
+        "max_steps_per_super_epoch": 100,
     }
 
     # config = {
