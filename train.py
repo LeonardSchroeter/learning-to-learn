@@ -38,7 +38,7 @@ class LearningToLearn():
         else: raise Exception("Config needs to have a dataset!")
 
         add_attr("batch_size", 64)
-        add_attr("optimizer_network", None)
+        add_attr("optimizer_network_generator", None)
         add_attr("train_optimizer_steps", 16)
         add_attr("objective_network_generator", None)
         add_attr("objective_loss_fn", None)
@@ -58,6 +58,8 @@ class LearningToLearn():
 
         self.util = Util()
         self.objective_network_weights = {}
+
+        self.optimizer_network = self.optimizer_network_generator()
 
         if self.load_weights:
             self.optimizer_network.load_weights(self.get_checkpoint_path(alternative=self.load_path))
@@ -250,7 +252,40 @@ class LearningToLearn():
 
             if step + 1 == max_steps_left:
                 break
-        
+    
+    def pretraining(self, steps):
+        print(f"Pretrain for {steps} steps")
+
+        inputs = tf.random.normal([steps])
+        outputs = -.001 * inputs
+
+        dataset = tf.data.Dataset.from_tensor_slices(
+            (inputs, outputs)
+        )
+
+        dataset = dataset.batch(self.batch_size, drop_remainder=True)
+
+        optimizer = keras.optimizers.Adam()
+
+        for x, y in dataset.as_numpy_iterator():
+            with tf.GradientTape() as tape:
+                out = self.optimizer_network(x)
+                loss = keras.losses.mean_squared_error(y, out)
+            gradients = tape.gradient(loss, self.optimizer_network.trainable_weights)
+            optimizer.apply_gradients(zip(gradients, self.optimizer_network.trainable_weights))
+
+        objective_network = self.new_objective(learned_optimizer=True)
+        x = list(self.dataset_test.batch(self.batch_size).as_numpy_iterator())[0][0]
+        with mock.patch.object(keras.layers.Layer, "add_weight", self.custom_add_weight()):
+            building_output = objective_network(x)
+        inputs = self.util.to_1d(self.objective_network_weights)
+        self.clear_weights()
+
+        weights = self.optimizer_network.get_weights()
+        self.optimizer_network = self.optimizer_network_generator()
+        _ = self.optimizer_network(inputs)
+        self.optimizer_network.set_weights(weights)
+
 class QuadMetric():
     def __init__(self):
         self.last_loss = tf.zeros([1])
@@ -284,20 +319,20 @@ def main():
     config = {
         "config_name": "test2",
         "dataset": dataset,
-        "batch_size": 128,
+        "batch_size": 64,
         "evaluation_size": 0.2,
-        "optimizer_network": LSTMNetworkPerParameter(0.1),
+        "optimizer_network_generator": lambda : LSTMNetworkPerParameter(0.1),
         "optimizer_optimizer": keras.optimizers.Adam(),
-        "train_optimizer_steps": 20,
+        "train_optimizer_steps": 16,
         "train_optimizer_every_step": False,
         "objective_network_generator": lambda : ConvNN(),
         "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
         "accumulate_losses": tf.add_n,
         "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
-        "super_epochs": 128,
-        "epochs": 1,
+        "super_epochs": 1,
+        "epochs": 10,
         "comparison_optimizers": [tf.keras.optimizers.Adam()],
-        "max_steps_per_super_epoch": 100,
+        # "max_steps_per_super_epoch": 100,
     }
 
     # config = {
@@ -319,8 +354,9 @@ def main():
     # }
 
     ltl = LearningToLearn(config)
+    ltl.pretraining(200_000)
     ltl.train_optimizer()
-    ltl.evaluate_optimizer()
+    # ltl.evaluate_optimizer()
 
 
 if __name__ == "__main__":
