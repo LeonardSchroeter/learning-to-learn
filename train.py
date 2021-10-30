@@ -12,7 +12,7 @@ from tensorflow import keras
 from examples import ConvNN
 from optimizer_network import LSTMNetworkPerParameter
 from QuadraticFunction import QuadraticFunctionLayer
-from util import Util
+from util import Util, preprocess_gradients
 
 
 class LearningToLearn():
@@ -55,6 +55,7 @@ class LearningToLearn():
         add_attr("comparison_optimizers", [])
         add_attr("max_steps_per_super_epoch", math.inf)
         add_attr("train_optimizer_every_step", False)
+        add_attr("objective_gradient_preprocessor", lambda x: x)
 
         self.util = Util()
         self.objective_network_weights = {}
@@ -174,7 +175,7 @@ class LearningToLearn():
                 with tape.stop_recording():
                     gradients = tape.gradient(loss, self.objective_network_weights)
                     gradients = self.util.to_1d(gradients)
-                    # gradients = self.util.preprocess_gradients(gradients, 10)
+                    gradients = self.objective_gradient_preprocessor(gradients)
                 gradients = tf.stop_gradient(gradients)
 
                 optimizer_output = self.optimizer_network(gradients)
@@ -257,7 +258,7 @@ class LearningToLearn():
         print(f"Pretrain for {steps} steps")
 
         # need low stddev, because values need to be similar to inputs in later training
-        inputs = tf.random.normal([steps], stddev=0.01)
+        inputs = tf.random.normal([steps])
         outputs = inputs * -0.01
 
         dataset = tf.data.Dataset.from_tensor_slices(
@@ -318,22 +319,23 @@ def main():
     )
 
     config = {
-        "config_name": "test2",
+        "config_name": "test1",
         "dataset": dataset,
         "batch_size": 64,
         "evaluation_size": 0.2,
-        "optimizer_network_generator": lambda : LSTMNetworkPerParameter(0.1),
+        "optimizer_network_generator": lambda: LSTMNetworkPerParameter(0.1),
         "optimizer_optimizer": keras.optimizers.Adam(),
         "train_optimizer_steps": 16,
         "train_optimizer_every_step": False,
-        "objective_network_generator": lambda : ConvNN(),
+        "objective_network_generator": lambda: ConvNN(),
         "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
         "accumulate_losses": tf.add_n,
         "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
         "super_epochs": 1,
         "epochs": 10,
         "comparison_optimizers": [tf.keras.optimizers.Adam()],
-        # "max_steps_per_super_epoch": 100,
+        "objective_gradient_preprocessor": lambda x: preprocess_gradients(x, 10),
+        "max_steps_per_super_epoch": 100,
     }
 
     # config = {
@@ -355,7 +357,7 @@ def main():
     # }
 
     ltl = LearningToLearn(config)
-    # ltl.pretraining(200_000)
+    ltl.pretraining(200_000)
     ltl.train_optimizer()
     ltl.evaluate_optimizer()
 

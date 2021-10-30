@@ -45,33 +45,25 @@ class Util():
                 i += 1
         return result_dict
 
-    # Runtime of this is pretty high (34826 parameters take ~2.5h per epoch)
-    # Should therefore only be used in examples with way less objective parameters
-    @tf.function
-    def preprocess_gradients(self, gradients, p):
-        tf_p = tf.constant(p, dtype=tf.float32)
-        tf_e = tf.exp(tf.constant(1.0))
+@tf.function
+def preprocess_gradients(gradients, p):
+    tf_p = tf.constant(p, dtype=tf.float32)
+    tf_e = tf.exp(tf.constant(1.0))
 
-        def scale(param):
-            cond1 = tf.greater_equal(param, tf.pow(tf_e, -1 * tf_p))
-            cond2 = tf.less_equal(param, -1 * tf.pow(tf_e, -1 * tf_p))
+    cond = tf.greater_equal(tf.abs(gradients), tf.pow(tf_e, -1 * tf_p))
 
-            func1 = lambda: tf.math.log(param) / tf_p
-            func2 = lambda: -1 * tf.math.log(-1 * param) / tf_p
-            func3 = lambda: -1 * tf.pow(tf_e, tf_p) * param
+    x = tf.sign(gradients) * tf.math.log(tf.abs(gradients)) / tf_p
+    y = -1 * tf.pow(tf_e, tf_p) * gradients
 
-            return tf.case([(cond1, func1), (cond2, func2)], default=func3)
-
-        return tf.map_fn(scale, gradients)
+    return tf.where(cond, x=x, y=y)
 
 if __name__ == "__main__":
-    util = Util()
-
     t1 = time.time()
     a = tf.random.normal([34826])
-    b = util.preprocess_gradients(a, 10)
+    a = tf.range(-1.0, 1.0, 0.001)
+    b = preprocess_gradients(a, 10)
     t2 = time.time()
     print(t2-t1)
-    # plt.plot(a.numpy(), b.numpy())
-    # plt.show()
+    plt.plot(a.numpy(), b.numpy())
+    plt.show()
 
