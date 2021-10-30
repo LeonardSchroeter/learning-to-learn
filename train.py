@@ -45,7 +45,7 @@ class LearningToLearn():
         add_attr("evaluation_metric", None)
         add_attr("super_epochs", 1)
         add_attr("epochs", 32)
-        add_attr("save_every_n_epoch", 1)
+        add_attr("save_every_n_epoch", math.inf)
         add_attr("evaluate_every_n_epoch", 1)
         add_attr("accumulate_losses", tf.add_n)
         add_attr("optimizer_optimizer", keras.optimizers.Adam())
@@ -258,7 +258,8 @@ class LearningToLearn():
         print(f"Pretrain for {steps} steps")
 
         # need low stddev, because values need to be similar to inputs in later training
-        inputs = tf.random.normal([steps])
+        inputs = tf.random.normal([steps], stddev=0.01)
+        inputs = self.objective_gradient_preprocessor(inputs)
         outputs = inputs * -0.01
 
         dataset = tf.data.Dataset.from_tensor_slices(
@@ -331,10 +332,10 @@ def main():
         "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
         "accumulate_losses": tf.add_n,
         "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
-        "super_epochs": 1,
+        "super_epochs": 50,
         "epochs": 10,
         "comparison_optimizers": [tf.keras.optimizers.Adam()],
-        "objective_gradient_preprocessor": lambda x: preprocess_gradients(x, 10),
+        # "objective_gradient_preprocessor": lambda x: preprocess_gradients(x, 10),
         "max_steps_per_super_epoch": 100,
     }
 

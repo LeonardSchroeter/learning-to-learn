@@ -3,16 +3,16 @@ from tensorflow import keras
 
 
 class LSTMNetworkPerParameter(keras.Model):
-    def __init__(self, learning_rate = 1, **kwargs):
+    def __init__(self, learning_rate = 1, dense_trainable = True, **kwargs):
         super(LSTMNetworkPerParameter, self).__init__(**kwargs)
         self.lstm1 = keras.layers.LSTM(20, stateful=True, return_sequences=True)
         self.lstm2 = keras.layers.LSTM(20, stateful=True)
-        # layer to combine outputs to a scalar, trainable
-        self.output_layer = keras.layers.Dense(1, use_bias=False)
-        # layer to combine outputs to a scalar by summing them, not trainable
-        # for some reason this configuration learns the opposite of what it should learn, the accuracy goes towards zero
-        # for some reason this does not yet seem to work
-        # self.output_layer = keras.layers.Dense(1, use_bias=False, trainable=False, kernel_initializer=tf.keras.initializers.Constant(value=0.01))
+        if dense_trainable:
+            # layer to combine outputs to a scalar, trainable
+            self.output_layer = keras.layers.Dense(1, use_bias=False)
+        else:
+            # layer to combine outputs to a scalar by summing them, not trainable
+            self.output_layer = keras.layers.Dense(1, use_bias=False, trainable=False, kernel_initializer=tf.keras.initializers.Constant(value=0.01))
 
         self.learning_rate = learning_rate
 
