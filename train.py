@@ -355,9 +355,9 @@ def main():
     # }
 
     ltl = LearningToLearn(config)
-    ltl.pretraining(200_000)
+    # ltl.pretraining(200_000)
     ltl.train_optimizer()
-    # ltl.evaluate_optimizer()
+    ltl.evaluate_optimizer()
 
 
 if __name__ == "__main__":

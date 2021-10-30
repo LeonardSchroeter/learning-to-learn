@@ -1,6 +1,7 @@
 import math
 import time
 
+import matplotlib.pyplot as plt
 import tensorflow as tf
 
 
@@ -44,25 +45,33 @@ class Util():
                 i += 1
         return result_dict
 
-    # Runtime of this is way to high to use in training
-    # Possible solution: implement using only tf functions
+    # Runtime of this is pretty high (34826 parameters take ~2.5h per epoch)
+    # Should therefore only be used in examples with way less objective parameters
+    @tf.function
     def preprocess_gradients(self, gradients, p):
-        def scale(parameter):
-            value = parameter.numpy()
-            if value >= math.e ** -p:
-                res = tf.math.log(parameter) / tf.constant(p, dtype=tf.float32)
-            elif value <= -math.e ** -p:
-                res = tf.math.log(tf.constant(-1, dtype=tf.float32) * parameter) / tf.constant(p, dtype=tf.float32)
-            else:
-                res = tf.constant(-math.e ** p) * parameter
-            return res
+        tf_p = tf.constant(p, dtype=tf.float32)
+        tf_e = tf.exp(tf.constant(1.0))
+
+        def scale(param):
+            cond1 = tf.greater_equal(param, tf.pow(tf_e, -1 * tf_p))
+            cond2 = tf.less_equal(param, -1 * tf.pow(tf_e, -1 * tf_p))
+
+            func1 = lambda: tf.math.log(param) / tf_p
+            func2 = lambda: -1 * tf.math.log(-1 * param) / tf_p
+            func3 = lambda: -1 * tf.pow(tf_e, tf_p) * param
+
+            return tf.case([(cond1, func1), (cond2, func2)], default=func3)
+
         return tf.map_fn(scale, gradients)
 
 if __name__ == "__main__":
     util = Util()
 
-    grads = tf.constant([-1e-4])
-    print(grads.numpy())
-    grads = util.preprocess_gradients(grads, 10)
-    print(grads.numpy())
-    
+    t1 = time.time()
+    a = tf.random.normal([34826])
+    b = util.preprocess_gradients(a, 10)
+    t2 = time.time()
+    print(t2-t1)
+    # plt.plot(a.numpy(), b.numpy())
+    # plt.show()
+
