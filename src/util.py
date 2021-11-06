@@ -1,7 +1,3 @@
-import math
-import time
-
-import matplotlib.pyplot as plt
 import tensorflow as tf
 
 
@@ -56,14 +52,4 @@ def preprocess_gradients(gradients, p):
     y = -1 * tf.pow(tf_e, tf_p) * gradients
 
     return tf.where(cond, x=x, y=y)
-
-if __name__ == "__main__":
-    t1 = time.time()
-    a = tf.random.normal([34826])
-    a = tf.range(-1.0, 1.0, 0.001)
-    b = preprocess_gradients(a, 10)
-    t2 = time.time()
-    print(t2-t1)
-    plt.plot(a.numpy(), b.numpy())
-    plt.show()
 

@@ -9,10 +9,7 @@ import mock
 import tensorflow as tf
 from tensorflow import keras
 
-from examples import ConvNN
-from optimizer_network import LSTMNetworkPerParameter
-from QuadraticFunction import QuadraticFunctionLayer
-from util import Util, preprocess_gradients
+from .util import Util
 
 
 class LearningToLearn():
@@ -163,7 +160,7 @@ class LearningToLearn():
             for step, (x, y) in dataset.enumerate().as_numpy_iterator():
                 if not objective_network.built:
                     with mock.patch.object(keras.layers.Layer, "add_weight", self.custom_add_weight()):
-                        building_output = objective_network(x)
+                        _ = objective_network(x)
 
                 tape.watch(self.objective_network_weights)
 
@@ -220,7 +217,7 @@ class LearningToLearn():
         self.clear_weights()
         
         objective_network = self.new_objective(learned_optimizer=True)
-        comparison_objectives = [self.new_objective() for opt in self.comparison_optimizers]
+        comparison_objectives = [self.new_objective() for _ in self.comparison_optimizers]
 
         steps_left = self.max_steps_per_super_epoch
 
@@ -254,7 +251,7 @@ class LearningToLearn():
             if step + 1 == max_steps_left:
                 break
     
-    def pretraining(self, steps):
+    def pretrain(self, steps):
         print(f"Pretrain for {steps} steps")
 
         # need low stddev, because values need to be similar to inputs in later training
@@ -280,7 +277,7 @@ class LearningToLearn():
         objective_network = self.new_objective(learned_optimizer=True)
         x = list(self.dataset_test.batch(self.batch_size).as_numpy_iterator())[0][0]
         with mock.patch.object(keras.layers.Layer, "add_weight", self.custom_add_weight()):
-            building_output = objective_network(x)
+            _ = objective_network(x)
         inputs = self.util.to_1d(self.objective_network_weights)
         self.clear_weights()
 
@@ -289,78 +286,9 @@ class LearningToLearn():
         _ = self.optimizer_network(inputs)
         self.optimizer_network.set_weights(weights)
 
-class QuadMetric():
-    def __init__(self):
-        self.last_loss = tf.zeros([1])
-
-    def reset_state(self):
-        self.last_loss = tf.zeros([1])
-
-    def update_state(self, inputs, outputs):
-        self.last_loss = outputs
-
-    def result(self):
-        return self.last_loss
 
 def main():
-    tf.random.set_seed(1)
-
-    # Quadratic example
-    # dataset = tf.data.Dataset.from_tensor_slices(
-    #     (tf.zeros([2000]), tf.zeros([2000]))
-    # )
-    # objective_network_generator = lambda : QuadraticFunctionLayer(10)
-    # objective_loss_fn = lambda x, y: y
-    # evaluation_metric = QuadMetric()
-
-    # MNIST example
-    (x_train, y_train), (x_test, y_test) = keras.datasets.mnist.load_data()
-    dataset = tf.data.Dataset.from_tensor_slices(
-        (x_train.reshape(60000, 28, 28, 1).astype("float32") / 255, y_train)
-    )
-
-    config = {
-        "config_name": "test1",
-        "dataset": dataset,
-        "batch_size": 64,
-        "evaluation_size": 0.2,
-        "optimizer_network_generator": lambda: LSTMNetworkPerParameter(0.1),
-        "optimizer_optimizer": keras.optimizers.Adam(),
-        "train_optimizer_steps": 16,
-        "train_optimizer_every_step": False,
-        "objective_network_generator": lambda: ConvNN(),
-        "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
-        "accumulate_losses": tf.add_n,
-        "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
-        "super_epochs": 50,
-        "epochs": 10,
-        "comparison_optimizers": [tf.keras.optimizers.Adam()],
-        # "objective_gradient_preprocessor": lambda x: preprocess_gradients(x, 10),
-        "max_steps_per_super_epoch": 100,
-    }
-
-    # config = {
-    #     "config_name": "test2",
-    #     "dataset": dataset,
-    #     "batch_size": 64,
-    #     "evaluation_size": 0.2,
-    #     "optimizer_network": LSTMNetworkPerParameter(0.01),
-    #     "optimizer_optimizer": keras.optimizers.Adam(),
-    #     "train_optimizer_steps": 16,
-    #     "objective_network_generator": lambda: ConvNN(),
-    #     "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
-    #     "accumulate_losses": tf.add_n,
-    #     "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
-    #     "super_epochs": 10,
-    #     "epochs": 10,
-    #     "save_every_n_epoch": 1,
-    #     "evaluate_every_n_epoch": 1,
-    # }
-
-    ltl = LearningToLearn(config)
-    ltl.pretraining(200_000)
-    ltl.train_optimizer()
-    ltl.evaluate_optimizer()
+    pass
 
 
 if __name__ == "__main__":
