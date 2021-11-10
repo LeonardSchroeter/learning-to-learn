@@ -53,6 +53,7 @@ class LearningToLearn():
         add_attr("max_steps_per_super_epoch", math.inf)
         add_attr("train_optimizer_every_step", False)
         add_attr("objective_gradient_preprocessor", lambda x: x)
+        add_attr("evaluation_size", 0.2)
 
         self.util = Util()
         self.objective_network_weights = {}
@@ -61,6 +62,13 @@ class LearningToLearn():
 
         if self.load_weights:
             self.optimizer_network.load_weights(self.get_checkpoint_path(alternative=self.load_path))
+
+    def setDataset(self, dataset):
+        print("Setting dataset")
+        dataset_length = len(list(dataset.as_numpy_iterator()))
+
+        self.dataset_train = dataset.skip(math.floor(dataset_length * self.evaluation_size))
+        self.dataset_test = dataset.take(math.floor(dataset_length * self.evaluation_size))
 
     def get_checkpoint_path(self, super_epoch = 0, epoch = 0, alternative = None):
         dirname = os.path.dirname(__file__)
@@ -205,7 +213,7 @@ class LearningToLearn():
 
     def evaluate_objective(self, objective_network, dataset):
         self.evaluation_metric.reset_state()
-        for step, (x, y) in dataset.enumerate().as_numpy_iterator():
+        for x, y in dataset.as_numpy_iterator():
             outputs = objective_network(x)
             self.evaluation_metric.update_state(y, outputs)
         print("  Accuracy: ", self.evaluation_metric.result().numpy())
@@ -255,14 +263,11 @@ class LearningToLearn():
         print(f"Pretrain for {steps} steps")
 
         # need low stddev, because values need to be similar to inputs in later training
-        inputs = tf.random.normal([steps], stddev=0.01)
+        inputs = tf.random.normal([steps], mean=0.0, stddev=0.001)
+        outputs = inputs * -1.0
         inputs = self.objective_gradient_preprocessor(inputs)
-        outputs = inputs * -0.01
 
-        dataset = tf.data.Dataset.from_tensor_slices(
-            (inputs, outputs)
-        )
-
+        dataset = tf.data.Dataset.from_tensor_slices((inputs, outputs))
         dataset = dataset.batch(self.batch_size, drop_remainder=True)
 
         optimizer = keras.optimizers.Adam()
