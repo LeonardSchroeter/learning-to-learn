@@ -53,3 +53,18 @@ def preprocess_gradients(gradients, p):
 
     return tf.where(cond, x=x, y=y)
 
+@tf.function
+def preprocess_gradients_inverse(gradients, p):
+    tf_p = tf.constant(p, dtype=tf.float32)
+    tf_e = tf.exp(tf.constant(1.0))
+
+    return -1 * tf.sign(gradients) * tf.pow(tf_e, -1 * tf_p * tf.abs(gradients))
+
+if __name__ == "__main__":
+    inp = tf.random.normal([10], stddev=0.01)
+    print(inp.numpy())
+    out = preprocess_gradients(inp, 10)
+    print(out.numpy())
+    inp2 = preprocess_gradients_inverse(out, 10)
+    print(inp2.numpy())
+    print(inp.numpy() == inp2.numpy())
