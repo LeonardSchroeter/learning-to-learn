@@ -12,7 +12,7 @@ class LSTMNetworkPerParameter(keras.Model):
             self.output_layer = keras.layers.Dense(1, use_bias=False)
         else:
             # layer to combine outputs to a scalar by summing them, not trainable
-            self.output_layer = keras.layers.Dense(1, use_bias=False, trainable=False, kernel_initializer=tf.keras.initializers.Constant(value=0.01))
+            self.output_layer = keras.layers.Dense(1, use_bias=False, trainable=False, kernel_initializer=tf.keras.initializers.Constant(value=1.0))
 
         self.learning_rate = learning_rate
 
