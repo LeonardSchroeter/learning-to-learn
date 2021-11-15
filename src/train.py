@@ -9,7 +9,7 @@ import mock
 import tensorflow as tf
 from tensorflow import keras
 
-from .util import Util
+from .util import Util, preprocess_gradients_inverse
 
 
 class LearningToLearn():
@@ -202,6 +202,7 @@ class LearningToLearn():
                     optimizer_loss = self.accumulate_losses(losses)
                     with tape.stop_recording():
                         optimizer_gradients = tape.gradient(optimizer_loss, self.optimizer_network.trainable_weights)
+                        optimizer_gradients = [tf.math.l2_normalize(grads) for grads in optimizer_gradients]
                         self.optimizer_optimizer.apply_gradients(zip(optimizer_gradients, self.optimizer_network.trainable_weights))
                     losses.clear()
                     tape.reset()
@@ -260,12 +261,18 @@ class LearningToLearn():
                 break
     
     def pretrain(self, steps):
-        print(f"Pretrain for {steps} steps")
+        print(f"Pretrain optimizer for {steps} steps")
+
+        # sampling the already preprocessed gradients from a uniform dist from -1 to 1, 
+        # since this is the only values the preprocessed gradients can take
+        # then take the inverse to derive at the desired outputs, i.e. simulating sgd
+        inputs = tf.random.uniform([steps], minval=-1.0, maxval=1.0)
+        outputs = preprocess_gradients_inverse(inputs, 10) * -0.001
 
         # need low stddev, because values need to be similar to inputs in later training
-        inputs = tf.random.normal([steps], mean=0.0, stddev=0.001)
-        outputs = inputs * -1.0
-        inputs = self.objective_gradient_preprocessor(inputs)
+        # inputs = tf.random.normal([steps], mean=0.0, stddev=0.001)
+        # outputs = inputs * -1.0
+        # inputs = self.objective_gradient_preprocessor(inputs)
 
         dataset = tf.data.Dataset.from_tensor_slices((inputs, outputs))
         dataset = dataset.batch(self.batch_size, drop_remainder=True)
