@@ -41,6 +41,50 @@ class Util():
                 i += 1
         return result_dict
 
+    def to_1d_per_layer(self, weight_dict):
+        dict_structure = {}
+        sizes_shapes = []
+        result = []
+        for layer_name, layer_weights in weight_dict.items():
+            weights_1d = []
+            dict_structure[layer_name] = {}
+
+            for weight_name, weights in layer_weights.items():
+                dict_structure[layer_name][weight_name] = None
+
+                size = tf.size(weights).numpy()
+                shape = tf.shape(weights).numpy()
+                sizes_shapes.append((size, shape))
+
+                weights_1d.append(tf.reshape(weights, size))
+
+            all_weights_1d = tf.concat(weights_1d, 0)
+            result.append(all_weights_1d)
+
+        self.dict_structure_per = dict_structure
+        self.sizes_shapes_per = sizes_shapes
+
+        return result
+
+    def from_1d_per_layer(self, tensor_arr):
+        if not self.dict_structure_per or not self.sizes_shapes_per:
+            raise Exception("You have to call to_1d before transforming back to dict!")
+
+        tensor_1d = tf.concat(tensor_arr, 0)
+        result_dict = self.dict_structure_per
+
+        sizes, shapes = zip(*self.sizes_shapes_per)
+        sizes, shapes = list(sizes), list(shapes)
+
+        tensors_split = tf.split(tensor_1d, sizes, 0)
+        tensors = [tf.reshape(tensor, shape) for tensor, shape in zip(tensors_split, shapes)]
+        i = 0
+        for layer_name in result_dict.keys():
+            for weight_name in result_dict[layer_name].keys():
+                result_dict[layer_name][weight_name] = tensors[i]
+                i += 1
+        return result_dict
+
 @tf.function
 def preprocess_gradients(gradients, p):
     tf_p = tf.constant(p, dtype=tf.float32)

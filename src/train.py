@@ -5,6 +5,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import math
 from collections import deque
 
+import matplotlib.pyplot as plt
 import mock
 import tensorflow as tf
 from tensorflow import keras
@@ -23,17 +24,7 @@ class LearningToLearn():
                 else:
                     setattr(self, name, default)
 
-        if "evaluation_size" in config:
-            evaluation_size = config["evaluation_size"]
-        else: evaluation_size = 0.2
-
-        if "dataset" in config:
-            dataset_length = len(list(config["dataset"].as_numpy_iterator()))
-
-            self.dataset_train = config["dataset"].skip(math.floor(dataset_length * evaluation_size))
-            self.dataset_test = config["dataset"].take(math.floor(dataset_length * evaluation_size))
-        else: raise Exception("Config needs to have a dataset!")
-
+        add_attr("dataset", None)
         add_attr("batch_size", 64)
         add_attr("optimizer_network_generator", None)
         add_attr("train_optimizer_steps", 16)
@@ -54,60 +45,80 @@ class LearningToLearn():
         add_attr("train_optimizer_every_step", False)
         add_attr("objective_gradient_preprocessor", lambda x: x)
         add_attr("evaluation_size", 0.2)
+        add_attr("num_layers", 1)
+        add_attr("one_optimizer", True)
 
         self.util = Util()
         self.objective_network_weights = {}
 
-        self.optimizer_network = self.optimizer_network_generator()
+        self.optimizer_networks = []
+
+        if self.one_optimizer:
+            num_layers = 1
+        else:
+            num_layers = self.num_layers
+        for _ in range(num_layers):
+            self.optimizer_networks.append(self.optimizer_network_generator())
 
         if self.load_weights:
-            self.optimizer_network.load_weights(self.get_checkpoint_path(alternative=self.load_path))
+            for optimizer_network in self.optimizer_networks:
+                optimizer_network.load_weights(self.get_checkpoint_path(alternative=self.load_path))
 
-    def setDataset(self, dataset):
-        print("Setting dataset")
-        dataset_length = len(list(dataset.as_numpy_iterator()))
+    def get_shuffeled_datasets(self):
+        dataset_length = len(self.dataset)
+        test_size = math.floor(dataset_length * self.evaluation_size)
 
-        self.dataset_train = dataset.skip(math.floor(dataset_length * self.evaluation_size))
-        self.dataset_test = dataset.take(math.floor(dataset_length * self.evaluation_size))
+        dataset_train = self.dataset.skip(test_size).shuffle(buffer_size=1024).batch(self.batch_size)
+        dataset_test = self.dataset.take(test_size).shuffle(buffer_size=1024).batch(self.batch_size)
+
+        return dataset_train, dataset_test
 
     def get_checkpoint_path(self, super_epoch = 0, epoch = 0, alternative = None):
-        dirname = os.path.dirname(__file__)
         if alternative:
             filename = alternative
         else:
             filename = f"{super_epoch}_{epoch}"
+
+        dirname = os.path.dirname(__file__)
         relative_path = f"checkpoints\{self.config_name}\{filename}"
         path = os.path.join(dirname, relative_path)
+
         return path
 
-    def clear_weights(self):
+    def clear_objective_weights(self):
         self.objective_network_weights = {}
+
+    def reset_optimizer_states(self):
+        for optimizer_network in self.optimizer_networks:
+            optimizer_network.reset_states()
 
     def apply_weight_changes(self, g_t):
         for layer_name in self.objective_network_weights.keys():
             for weight_name in self.objective_network_weights[layer_name].keys():
                 self.objective_network_weights[layer_name][weight_name] = self.objective_network_weights[layer_name][weight_name] + g_t[layer_name][weight_name]
 
-    def custom_getter(self, layer_name):
-        def _custom_getter(name, **kwargs):
-            if layer_name in self.objective_network_weights and name in self.objective_network_weights[layer_name]:
-                return self.objective_network_weights[layer_name][name]
+    def custom_getter_generator(self, layer_name):
+        def _custom_getter(weight_name):
+            if layer_name in self.objective_network_weights and weight_name in self.objective_network_weights[layer_name]:
+                return self.objective_network_weights[layer_name][weight_name]
             return None
         return _custom_getter
 
     def custom_add_weight(self):
-        original_add_weight = keras.layers.Layer.add_weight
         def _custom_add_weight(other, name, shape, dtype, initializer, **kwargs):
             if initializer:
                 tensor = initializer(shape, dtype=dtype)
             else:
                 tensor = tf.zeros(shape, dtype=dtype)
+
             if not other.name in self.objective_network_weights:
                 self.objective_network_weights[other.name] = {}
+
             self.objective_network_weights[other.name][name] = tensor
-            getter = self.custom_getter(other.name)
-            original_add_weight(other, name=name, shape=shape, dtype=dtype, initializer=initializer, getter=getter, **kwargs)
-            return getter(name)
+
+            custom_getter = self.custom_getter_generator(other.name)
+            return custom_getter(name)
+
         return _custom_add_weight
 
     def custom_call(self):
@@ -117,16 +128,26 @@ class LearningToLearn():
                 for name, weight in self.objective_network_weights[other.name].items():
                     if hasattr(other, name):
                         setattr(other, name, weight)
+                    else: print(f"Layer {other.name} does not have attribute {name}")
             return original_call(other, *args, **kwargs)
         return _custom_call
 
     def new_objective(self, learned_optimizer = False):
-        if not learned_optimizer:
-            return self.objective_network_generator()
-
-        with mock.patch.object(keras.layers.Layer, "add_weight", self.custom_add_weight()):
+        if learned_optimizer:
+            with mock.patch.object(keras.layers.Layer, "add_weight", self.custom_add_weight()):
+                objective_network = self.objective_network_generator()
+        else:
             objective_network = self.objective_network_generator()
         return objective_network
+
+    def build_objective(self, objective_network, x):
+        if not objective_network.built:
+            with mock.patch.object(keras.layers.Layer, "add_weight", self.custom_add_weight()):
+                _ = objective_network(x)
+
+    def call_objective(self, objective_network, x):
+        with mock.patch.object(keras.layers.Layer, "__call__", self.custom_call()):
+            return objective_network(x)
 
     def train_optimizer(self):
         print("Train optimizer")
@@ -134,8 +155,8 @@ class LearningToLearn():
         for super_epoch in range(1, self.super_epochs + 1):
             print("Super epoch: ", super_epoch)
 
-            self.optimizer_network.reset_states()
-            self.clear_weights()
+            self.reset_optimizer_states()
+            self.clear_objective_weights()
             
             objective_network = self.new_objective(learned_optimizer=True)
 
@@ -144,86 +165,109 @@ class LearningToLearn():
             for epoch in range(1, self.epochs + 1):
                 print("Epoch: ", epoch)
 
-                dataset_train = self.dataset_train.shuffle(buffer_size=1024).batch(self.batch_size)
-                dataset_test = self.dataset_test.shuffle(buffer_size=1024).batch(self.batch_size)
+                dataset_train, dataset_test = self.get_shuffeled_datasets()
 
-                steps_taken = self.train_objective(objective_network, dataset_train, steps_left, True)
-                steps_left = steps_left - steps_taken
+                steps_left = self.train_objective(objective_network, dataset_train, steps_left, True)
                 
                 if epoch % self.evaluate_every_n_epoch == 0:
                     self.evaluate_objective(objective_network, dataset_test)
 
                 if epoch % self.save_every_n_epoch == 0:
-                    self.optimizer_network.save_weights(self.get_checkpoint_path(super_epoch, epoch))
+                    self.optimizer_networks[0].save_weights(self.get_checkpoint_path(super_epoch, epoch))
 
                 if steps_left == 0:
                     break
 
-        self.optimizer_network.save_weights(self.get_checkpoint_path(alternative="result"))
+        self.optimizer_networks[0].save_weights(self.get_checkpoint_path(alternative="result"))
 
-    def train_objective(self, objective_network, dataset, max_steps_left = math.inf, train_optimizer = False):
+    def train_objective(self, objective_network, dataset, steps_left = math.inf, train_optimizer = False):
         losses = deque(maxlen=self.train_optimizer_steps)
 
         with tf.GradientTape(persistent=True) as tape:
             for step, (x, y) in dataset.enumerate().as_numpy_iterator():
-                if not objective_network.built:
-                    with mock.patch.object(keras.layers.Layer, "add_weight", self.custom_add_weight()):
-                        _ = objective_network(x)
+                self.build_objective(objective_network, x)
 
                 tape.watch(self.objective_network_weights)
 
-                with mock.patch.object(keras.layers.Layer, "__call__", self.custom_call()):
-                    outputs = objective_network(x)
+                outputs = self.call_objective(objective_network, x)
+
                 loss = self.objective_loss_fn(y, outputs)
                 losses.append(loss)
 
-                with tape.stop_recording():
-                    gradients = tape.gradient(loss, self.objective_network_weights)
-                    gradients = self.util.to_1d(gradients)
-                    gradients = self.objective_gradient_preprocessor(gradients)
-                gradients = tf.stop_gradient(gradients)
+                if self.one_optimizer:
+                    with tape.stop_recording():
+                        gradients = tape.gradient(loss, self.objective_network_weights)
+                        gradients = self.util.to_1d(gradients)
+                        gradients = self.objective_gradient_preprocessor(gradients)
+                    gradients = tf.stop_gradient(gradients)
 
-                optimizer_output = self.optimizer_network(gradients)
-                optimizer_output = self.util.from_1d(optimizer_output)
+                    optimizer_output = self.optimizer_networks[0](gradients)
+                    optimizer_output = self.util.from_1d(optimizer_output)
+                else:
+                    with tape.stop_recording():
+                        gradients = tape.gradient(loss, self.objective_network_weights)
+                        gradients = self.util.to_1d_per_layer(gradients)
+                        gradients = [self.objective_gradient_preprocessor(g) for g in gradients]
+                    gradients = [tf.stop_gradient(g) for g in gradients]
+
+                    optimizer_output = [optimizer_network(g) for optimizer_network, g in zip(self.optimizer_networks, gradients)]
+                    optimizer_output = self.util.from_1d_per_layer(optimizer_output)
                 
                 self.apply_weight_changes(optimizer_output)
+
+                steps_left -= 1
+                if steps_left == 0:
+                    break
                 
+                if not train_optimizer:
+                    losses.clear()
+                    tape.reset()
+                    continue
+
                 if step == 0:
                     continue
-                elif not train_optimizer:
-                    losses.clear()
-                    tape.reset()
-                elif self.train_optimizer_every_step:
-                    optimizer_loss = self.accumulate_losses(losses)
-                    with tape.stop_recording():
-                        optimizer_gradients = tape.gradient(optimizer_loss, self.optimizer_network.trainable_weights)
-                        self.optimizer_optimizer.apply_gradients(zip(optimizer_gradients, self.optimizer_network.trainable_weights))
-                elif (step + 1) % self.train_optimizer_steps == 0:
-                    optimizer_loss = self.accumulate_losses(losses)
-                    with tape.stop_recording():
-                        optimizer_gradients = tape.gradient(optimizer_loss, self.optimizer_network.trainable_weights)
-                        optimizer_gradients = [tf.math.l2_normalize(grads) for grads in optimizer_gradients]
-                        self.optimizer_optimizer.apply_gradients(zip(optimizer_gradients, self.optimizer_network.trainable_weights))
-                    losses.clear()
-                    tape.reset()
+                
+                if self.train_optimizer_every_step:
+                    self.update_optimizer(tape, losses)
+                    continue
 
-                if step + 1 == max_steps_left:
-                    break
+                if (step + 1) % self.train_optimizer_steps == 0:
+                    self.update_optimizer(tape, losses)
+                    losses.clear()
+                    tape.reset()
+                    continue
         
-        return step + 1
+        return steps_left
+
+    def update_optimizer(self, tape, losses):
+        optimizer_loss = self.accumulate_losses(losses)
+        with tape.stop_recording():
+            for optimizer_network in self.optimizer_networks:
+                optimizer_gradients = tape.gradient(optimizer_loss, optimizer_network.trainable_weights)
+                optimizer_gradients = [tf.math.l2_normalize(g) for g in optimizer_gradients]
+                self.optimizer_optimizer.apply_gradients(zip(optimizer_gradients, optimizer_network.trainable_weights))
 
     def evaluate_objective(self, objective_network, dataset):
         self.evaluation_metric.reset_state()
+        # losses = []
+        # x_vals = []
+        # i = 1
         for x, y in dataset.as_numpy_iterator():
             outputs = objective_network(x)
+            # loss = self.objective_loss_fn(y, outputs)
+            # losses.append(loss.numpy())
+            # x_vals.append(i)
+            # i += 1
             self.evaluation_metric.update_state(y, outputs)
+        # plt.plot(x_vals, losses)
+        # plt.savefig(f"{filename}.eps")
         print("  Accuracy: ", self.evaluation_metric.result().numpy())
     
     def evaluate_optimizer(self):
         print("Evaluate optimizer")
 
-        self.optimizer_network.reset_states()
-        self.clear_weights()
+        self.reset_optimizer_states()
+        self.clear_objective_weights()
         
         objective_network = self.new_objective(learned_optimizer=True)
         comparison_objectives = [self.new_objective() for _ in self.comparison_optimizers]
@@ -233,32 +277,32 @@ class LearningToLearn():
         for epoch in range(1, self.epochs + 1):
             print("Epoch: ", epoch)
 
-            dataset_train = self.dataset_train.shuffle(buffer_size=1024).batch(self.batch_size)
-            dataset_test = self.dataset_test.shuffle(buffer_size=1024).batch(self.batch_size)
+            dataset_train, dataset_test = self.get_shuffeled_datasets()
 
-            steps_taken = self.train_objective(objective_network, dataset_train, steps_left)
+            steps_left_new = self.train_objective(objective_network, dataset_train, steps_left)
             for objective, optimizer in zip(comparison_objectives, self.comparison_optimizers):
                 self.train_compare(objective, optimizer, dataset_train, steps_left)
-            steps_left = steps_left - steps_taken
             
             if epoch % self.evaluate_every_n_epoch == 0:
                 self.evaluate_objective(objective_network, dataset_test)
                 for objective in comparison_objectives:
                     self.evaluate_objective(objective, dataset_test)
+
+            steps_left = steps_left_new
             if steps_left == 0:
                 break
 
-    def train_compare(self, objective_network, optimizer, dataset, max_steps_left):
+    def train_compare(self, objective_network, optimizer, dataset, steps_left):
         for step, (x, y) in dataset.enumerate().as_numpy_iterator():
+            if step == steps_left:
+                break
+
             with tf.GradientTape() as tape:
                 outputs = objective_network(x)
                 loss = self.objective_loss_fn(y, outputs)
 
             gradients = tape.gradient(loss, objective_network.trainable_weights)
-            optimizer.apply_gradients(zip(gradients, objective_network.trainable_weights))
-
-            if step + 1 == max_steps_left:
-                break
+            optimizer.apply_gradients(zip(gradients, objective_network.trainable_weights)) 
     
     def pretrain(self, steps):
         print(f"Pretrain optimizer for {steps} steps")
@@ -266,38 +310,36 @@ class LearningToLearn():
         # sampling the already preprocessed gradients from a uniform dist from -1 to 1, 
         # since this is the only values the preprocessed gradients can take
         # then take the inverse to derive at the desired outputs, i.e. simulating sgd
-        inputs = tf.random.uniform([steps], minval=-1.0, maxval=1.0)
-        outputs = preprocess_gradients_inverse(inputs, 10) * -0.001
+        # inputs = tf.random.uniform([steps], minval=-1.0, maxval=1.0)
+        # outputs = preprocess_gradients_inverse(inputs, 10) * -0.001
 
         # need low stddev, because values need to be similar to inputs in later training
-        # inputs = tf.random.normal([steps], mean=0.0, stddev=0.001)
-        # outputs = inputs * -1.0
-        # inputs = self.objective_gradient_preprocessor(inputs)
+        inputs = tf.random.normal([steps], mean=0.0, stddev=0.001)
+        outputs = inputs * -1.0
+        inputs = self.objective_gradient_preprocessor(inputs)
 
-        dataset = tf.data.Dataset.from_tensor_slices((inputs, outputs))
-        dataset = dataset.batch(self.batch_size, drop_remainder=True)
+        dataset = tf.data.Dataset.from_tensor_slices((inputs, outputs)).batch(self.batch_size, drop_remainder=True)
 
         optimizer = keras.optimizers.Adam()
+        optimizer_network = self.optimizer_network_generator()
 
         for x, y in dataset.as_numpy_iterator():
             with tf.GradientTape() as tape:
-                out = self.optimizer_network(x)
+                out = optimizer_network(x)
                 loss = keras.losses.mean_squared_error(y, out)
-            gradients = tape.gradient(loss, self.optimizer_network.trainable_weights)
-            optimizer.apply_gradients(zip(gradients, self.optimizer_network.trainable_weights))
+            gradients = tape.gradient(loss, optimizer_network.trainable_weights)
+            optimizer.apply_gradients(zip(gradients, optimizer_network.trainable_weights))
 
         objective_network = self.new_objective(learned_optimizer=True)
-        x = list(self.dataset_test.batch(self.batch_size).as_numpy_iterator())[0][0]
-        with mock.patch.object(keras.layers.Layer, "add_weight", self.custom_add_weight()):
-            _ = objective_network(x)
-        inputs = self.util.to_1d(self.objective_network_weights)
-        self.clear_weights()
+        self.train_objective(objective_network, self.get_shuffeled_datasets()[0], 1)
 
-        weights = self.optimizer_network.get_weights()
-        self.optimizer_network = self.optimizer_network_generator()
-        _ = self.optimizer_network(inputs)
-        self.optimizer_network.set_weights(weights)
+        weights = optimizer_network.get_weights()
 
+        for opt_net in self.optimizer_networks:
+            opt_net.set_weights(weights)
+
+        self.clear_objective_weights()
+        self.reset_optimizer_states()
 
 def main():
     pass
