@@ -1,5 +1,6 @@
 import math
 
+import matplotlib.pyplot as plt
 import tensorflow as tf
 from tensorflow import keras
 
@@ -85,7 +86,7 @@ mnist_dnn_dataset = tf.data.Dataset.from_tensor_slices((x_train.reshape(60000, 7
 (x_train, y_train), (_, _) = keras.datasets.fashion_mnist.load_data()
 fashion_mnist_dataset = tf.data.Dataset.from_tensor_slices((x_train.reshape(60000, 28, 28, 1).astype("float32") / 255, y_train))
 
-quadratic_dataset = tf.data.Dataset.from_tensor_slices((tf.zeros([2000]), tf.zeros([2000])))
+quadratic_dataset = tf.data.Dataset.from_tensor_slices((tf.zeros([640]), tf.zeros([640])))
 
 # config for mnist no preprocessing
 # good seed: 8
@@ -119,20 +120,18 @@ config_mnist = {
     "comparison_optimizers": [keras.optimizers.Adam()],
 }
 
-# config for mnist with preprocessing
-# good seed: 4
 config_mnist_2 = {
-    "config_name": "mnist",
-    "objective_network_generator": lambda: MLP(),
-    "num_layers": 2,
+    "config_name": "mnist_relu_sigmoid",
+    "objective_network_generator": lambda: ConvNN(),
+    "num_layers": 3,
     "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
     "objective_gradient_preprocessor": lambda x: preprocess_gradients(x, 10),
 
-    "dataset": mnist_dnn_dataset,
+    "dataset": mnist_dataset,
     "evaluation_size": 0.2,
-    "batch_size": 64,
+    "batch_size": 128,
 
-    "optimizer_network_generator": lambda: LSTMNetworkPerParameter(0.1, dense_trainable=False),
+    "optimizer_network_generator": lambda: LSTMNetworkPerParameter(0.01, dense_trainable=False),
     "one_optimizer": False,
     "optimizer_optimizer": keras.optimizers.Adam(),
     "train_optimizer_steps": 16,
@@ -140,8 +139,8 @@ config_mnist_2 = {
     "train_optimizer_every_step": False,
 
     "super_epochs": 5,
-    "epochs": 5,
-    "max_steps_per_super_epoch": 100,
+    "epochs": 1,
+    "max_steps_per_super_epoch": math.inf,
 
     "evaluate_every_n_epoch": 1,
     "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
@@ -153,9 +152,41 @@ config_mnist_2 = {
     "comparison_optimizers": [keras.optimizers.SGD(), keras.optimizers.Adam()],
 }
 
-config_quad = {
-    "config_name": "quadratic",
-    "objective_network_generator": lambda: QuadraticFunctionLayer(10),
+config_quad_preprocessing = {
+    "config_name": "quadratic_preprocessing",
+    "objective_network_generator": lambda: QuadraticFunctionLayer(16),
+    "num_layers": 1,
+    "objective_loss_fn": lambda y_true, y_pred: y_pred,
+    "objective_gradient_preprocessor": lambda x: preprocess_gradients(x, 10),
+
+    "dataset": quadratic_dataset,
+    "evaluation_size": 0.5,
+    "batch_size": 1,
+
+    "optimizer_network_generator": lambda: LSTMNetworkPerParameter(0.001, dense_trainable=False),
+    "one_optimizer": True,
+    "optimizer_optimizer": keras.optimizers.Adam(),
+    "train_optimizer_steps": 16,
+    "accumulate_losses": tf.add_n,
+    "train_optimizer_every_step": False,
+
+    "super_epochs": 25,
+    "epochs": 1,
+    "max_steps_per_super_epoch": 320,
+
+    "evaluate_every_n_epoch": 1,
+    "evaluation_metric": QuadMetric(),
+
+    "save_every_n_epoch": math.inf,
+    "load_weights": False,
+    "load_path": "result",
+
+    "comparison_optimizers": [keras.optimizers.SGD(), keras.optimizers.Adam()],
+}
+
+config_quad_no_preprocessing = {
+    "config_name": "quadratic_no_preprocessing",
+    "objective_network_generator": lambda: QuadraticFunctionLayer(16),
     "num_layers": 1,
     "objective_loss_fn": lambda y_true, y_pred: y_pred,
     "objective_gradient_preprocessor": lambda x: x,
@@ -164,15 +195,16 @@ config_quad = {
     "evaluation_size": 0.5,
     "batch_size": 1,
 
-    "optimizer_network_generator": lambda: LSTMNetworkPerParameter(0.01, dense_trainable=False),
+    "optimizer_network_generator": lambda: LSTMNetworkPerParameter(0.001, dense_trainable=False),
+    "one_optimizer": True,
     "optimizer_optimizer": keras.optimizers.Adam(),
     "train_optimizer_steps": 16,
     "accumulate_losses": tf.add_n,
     "train_optimizer_every_step": False,
 
-    "super_epochs": 10,
+    "super_epochs": 25,
     "epochs": 1,
-    "max_steps_per_super_epoch": math.inf,
+    "max_steps_per_super_epoch": 320,
 
     "evaluate_every_n_epoch": 1,
     "evaluation_metric": QuadMetric(),
@@ -185,15 +217,17 @@ config_quad = {
 }
 
 def transfer_mnist_to_fashion_mnist():
+    plt.rcParams['text.usetex'] = True
+
     tf.random.set_seed(1)
 
-    ltl = LearningToLearn(config_mnist_2)
+    ltl_1 = LearningToLearn(config_quad_no_preprocessing)
+    ltl_1.train_optimizer()
+    ltl_1.evaluate_optimizer("1", label="Without Preprocessing", clear_figure=False)
 
-    # ltl.pretrain(10_000)
-    ltl.evaluate_optimizer()
-    ltl.train_optimizer()
-    # ltl.dataset = fashion_mnist_dataset
-    # ltl.evaluate_optimizer()
+    # ltl_2 = LearningToLearn(config_quad_preprocessing)
+    # ltl_2.train_optimizer()
+    # ltl_2.evaluate_optimizer("1", label="With Preprocessing", clear_figure=False)
 
 def main():
     transfer_mnist_to_fashion_mnist()

@@ -68,8 +68,8 @@ class LearningToLearn():
         dataset_length = len(self.dataset)
         test_size = math.floor(dataset_length * self.evaluation_size)
 
-        dataset_train = self.dataset.skip(test_size).shuffle(buffer_size=1024).batch(self.batch_size)
-        dataset_test = self.dataset.take(test_size).shuffle(buffer_size=1024).batch(self.batch_size)
+        dataset_train = self.dataset.skip(test_size).shuffle(buffer_size=1024).batch(self.batch_size, drop_remainder=True)
+        dataset_test = self.dataset.take(test_size).shuffle(buffer_size=1024).batch(self.batch_size, drop_remainder=True)
 
         return dataset_train, dataset_test
 
@@ -168,7 +168,7 @@ class LearningToLearn():
                 dataset_train, dataset_test = self.get_shuffeled_datasets()
 
                 steps_left = self.train_objective(objective_network, dataset_train, steps_left, True)
-                
+
                 if epoch % self.evaluate_every_n_epoch == 0:
                     self.evaluate_objective(objective_network, dataset_test)
 
@@ -178,10 +178,11 @@ class LearningToLearn():
                 if steps_left == 0:
                     break
 
-        self.optimizer_networks[0].save_weights(self.get_checkpoint_path(alternative="result"))
+        # self.optimizer_networks[0].save_weights(self.get_checkpoint_path(alternative="result"))
 
-    def train_objective(self, objective_network, dataset, steps_left = math.inf, train_optimizer = False):
+    def train_objective(self, objective_network, dataset, steps_left = math.inf, train_optimizer = False, return_losses = False):
         losses = deque(maxlen=self.train_optimizer_steps)
+        all_losses = []
 
         with tf.GradientTape(persistent=True) as tape:
             for step, (x, y) in dataset.enumerate().as_numpy_iterator():
@@ -192,6 +193,8 @@ class LearningToLearn():
                 outputs = self.call_objective(objective_network, x)
 
                 loss = self.objective_loss_fn(y, outputs)
+                with tape.stop_recording():
+                    all_losses.append(loss.numpy())
                 losses.append(loss)
 
                 if self.one_optimizer:
@@ -212,7 +215,6 @@ class LearningToLearn():
 
                     optimizer_output = [optimizer_network(g) for optimizer_network, g in zip(self.optimizer_networks, gradients)]
                     optimizer_output = self.util.from_1d_per_layer(optimizer_output)
-                
                 self.apply_weight_changes(optimizer_output)
 
                 steps_left -= 1
@@ -237,6 +239,8 @@ class LearningToLearn():
                     tape.reset()
                     continue
         
+        if return_losses:
+            return steps_left, all_losses
         return steps_left
 
     def update_optimizer(self, tape, losses):
@@ -249,21 +253,12 @@ class LearningToLearn():
 
     def evaluate_objective(self, objective_network, dataset):
         self.evaluation_metric.reset_state()
-        # losses = []
-        # x_vals = []
-        # i = 1
         for x, y in dataset.as_numpy_iterator():
             outputs = objective_network(x)
-            # loss = self.objective_loss_fn(y, outputs)
-            # losses.append(loss.numpy())
-            # x_vals.append(i)
-            # i += 1
             self.evaluation_metric.update_state(y, outputs)
-        # plt.plot(x_vals, losses)
-        # plt.savefig(f"{filename}.eps")
         print("  Accuracy: ", self.evaluation_metric.result().numpy())
     
-    def evaluate_optimizer(self):
+    def evaluate_optimizer(self, filename, label = "Loss", clear_figure = True):
         print("Evaluate optimizer")
 
         self.reset_optimizer_states()
@@ -274,12 +269,16 @@ class LearningToLearn():
 
         steps_left = self.max_steps_per_super_epoch
 
+        all_losses = []
+
         for epoch in range(1, self.epochs + 1):
             print("Epoch: ", epoch)
 
             dataset_train, dataset_test = self.get_shuffeled_datasets()
 
-            steps_left_new = self.train_objective(objective_network, dataset_train, steps_left)
+            steps_left_new, losses = self.train_objective(objective_network, dataset_train, steps_left, return_losses=True)
+            all_losses.extend(losses)
+
             for objective, optimizer in zip(comparison_objectives, self.comparison_optimizers):
                 self.train_compare(objective, optimizer, dataset_train, steps_left)
             
@@ -291,6 +290,22 @@ class LearningToLearn():
             steps_left = steps_left_new
             if steps_left == 0:
                 break
+
+        x = list(range(1, len(all_losses) + 1))
+
+        plt.plot(x, all_losses, label=label)
+        plt.legend()
+        plt.xlabel("Steps")
+        plt.ylabel("Loss")
+
+        if filename:
+            path = f"plots/{self.config_name}_{filename}.eps"
+        else:
+            path = f"plots/{self.config_name}.eps"
+        plt.savefig(path)
+
+        if clear_figure:
+            plt.clf()
 
     def train_compare(self, objective_network, optimizer, dataset, steps_left):
         for step, (x, y) in dataset.enumerate().as_numpy_iterator():

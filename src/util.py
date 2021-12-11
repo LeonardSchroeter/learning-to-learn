@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import tensorflow as tf
 
 
@@ -105,10 +106,11 @@ def preprocess_gradients_inverse(gradients, p):
     return -1 * tf.sign(gradients) * tf.pow(tf_e, -1 * tf_p * tf.abs(gradients))
 
 if __name__ == "__main__":
-    inp = tf.random.normal([10], stddev=0.01)
-    print(inp.numpy())
-    out = preprocess_gradients(inp, 10)
-    print(out.numpy())
-    inp2 = preprocess_gradients_inverse(out, 10)
-    print(inp2.numpy())
-    print(inp.numpy() == inp2.numpy())
+    plt.rcParams['text.usetex'] = True
+    x = tf.range(-6.0, 6.0, 0.00001)
+    y = preprocess_gradients(x, 10)
+    plt.plot(x, y)
+    plt.grid(True)
+    plt.ylabel(r"$\rho$")
+    plt.xlabel(r"$\nabla^1_t$")
+    plt.show()

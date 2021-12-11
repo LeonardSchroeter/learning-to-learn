@@ -6,7 +6,7 @@ class MLP(keras.layers.Layer):
     def __init__(self):
         super(MLP, self).__init__()
         lrelu = lambda x: keras.activations.relu(x, alpha=0.3)
-        self.linear_1 = keras.layers.Dense(32, activation="sigmoid")
+        self.linear_1 = keras.layers.Dense(32, activation=lrelu)
         self.linear_2 = keras.layers.Dense(10, activation="sigmoid")
 
     def call(self, inputs):
@@ -16,9 +16,10 @@ class MLP(keras.layers.Layer):
 class ConvNN(keras.layers.Layer):
     def __init__(self):
         super(ConvNN, self).__init__()
-        self.layer1 = keras.layers.Conv2D(32, kernel_size=(3, 3), activation="relu")
+        lrelu = lambda x: keras.activations.relu(x, alpha=0.3)
+        self.layer1 = keras.layers.Conv2D(32, kernel_size=(3, 3), activation=lrelu)
         self.layer2 = keras.layers.MaxPooling2D(pool_size=(2, 2))
-        self.layer3 = keras.layers.Conv2D(64, kernel_size=(3, 3), activation="relu")
+        self.layer3 = keras.layers.Conv2D(64, kernel_size=(3, 3), activation=lrelu)
         self.layer4 = keras.layers.MaxPooling2D(pool_size=(2, 2))
         self.layer5 = keras.layers.Flatten()
         self.layer6 = keras.layers.Dense(10, activation="softmax")
