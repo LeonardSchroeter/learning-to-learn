@@ -6,7 +6,7 @@ class MLP(keras.layers.Layer):
     def __init__(self):
         super(MLP, self).__init__()
         lrelu = lambda x: keras.activations.relu(x, alpha=0.3)
-        self.linear_1 = keras.layers.Dense(32, activation=lrelu)
+        self.linear_1 = keras.layers.Dense(32, activation="sigmoid")
         self.linear_2 = keras.layers.Dense(10, activation="sigmoid")
 
     def call(self, inputs):

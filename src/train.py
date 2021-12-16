@@ -47,6 +47,7 @@ class LearningToLearn():
         add_attr("evaluation_size", 0.2)
         add_attr("num_layers", 1)
         add_attr("one_optimizer", True)
+        add_attr("preprocess_optimizer_gradients", True)
 
         self.util = Util()
         self.objective_network_weights = {}
@@ -178,7 +179,7 @@ class LearningToLearn():
                 if steps_left == 0:
                     break
 
-        # self.optimizer_networks[0].save_weights(self.get_checkpoint_path(alternative="result"))
+        self.optimizer_networks[0].save_weights(self.get_checkpoint_path(alternative="result"))
 
     def train_objective(self, objective_network, dataset, steps_left = math.inf, train_optimizer = False, return_losses = False):
         losses = deque(maxlen=self.train_optimizer_steps)
@@ -248,7 +249,8 @@ class LearningToLearn():
         with tape.stop_recording():
             for optimizer_network in self.optimizer_networks:
                 optimizer_gradients = tape.gradient(optimizer_loss, optimizer_network.trainable_weights)
-                optimizer_gradients = [tf.math.l2_normalize(g) for g in optimizer_gradients]
+                if self.preprocess_optimizer_gradients:
+                    optimizer_gradients = [tf.math.l2_normalize(g) for g in optimizer_gradients]
                 self.optimizer_optimizer.apply_gradients(zip(optimizer_gradients, optimizer_network.trainable_weights))
 
     def evaluate_objective(self, objective_network, dataset):
@@ -294,7 +296,7 @@ class LearningToLearn():
         x = list(range(1, len(all_losses) + 1))
 
         plt.plot(x, all_losses, label=label)
-        plt.legend()
+        plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.15))
         plt.xlabel("Steps")
         plt.ylabel("Loss")
 
