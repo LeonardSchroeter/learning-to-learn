@@ -2,6 +2,50 @@ import tensorflow as tf
 from tensorflow import keras
 
 
+class MLPSigmoid(keras.layers.Layer):
+    def __init__(self):
+        super(MLPSigmoid, self).__init__()
+        lrelu = lambda x: keras.activations.relu(x, alpha=0.3)
+        self.linear_1 = keras.layers.Dense(32, activation="sigmoid")
+        self.linear_2 = keras.layers.Dense(10, activation="softmax")
+
+    def call(self, inputs):
+        x = self.linear_1(inputs)
+        return self.linear_2(x)
+
+class MLPRelu(keras.layers.Layer):
+    def __init__(self):
+        super(MLPRelu, self).__init__()
+        lrelu = lambda x: keras.activations.relu(x, alpha=0.3)
+        self.linear_1 = keras.layers.Dense(32, activation="relu")
+        self.linear_2 = keras.layers.Dense(10, activation="softmax")
+
+    def call(self, inputs):
+        x = self.linear_1(inputs)
+        return self.linear_2(x)
+
+class MLPLeakyRelu(keras.layers.Layer):
+    def __init__(self):
+        super(MLPLeakyRelu, self).__init__()
+        lrelu = lambda x: keras.activations.relu(x, alpha=0.1)
+        self.linear_1 = keras.layers.Dense(32, activation=lrelu)
+        self.linear_2 = keras.layers.Dense(10, activation="softmax")
+
+    def call(self, inputs):
+        x = self.linear_1(inputs)
+        return self.linear_2(x)
+
+class MLPTanh(keras.layers.Layer):
+    def __init__(self):
+        super(MLPTanh, self).__init__()
+        lrelu = lambda x: keras.activations.relu(x, alpha=0.3)
+        self.linear_1 = keras.layers.Dense(32, activation="tanh")
+        self.linear_2 = keras.layers.Dense(10, activation="softmax")
+
+    def call(self, inputs):
+        x = self.linear_1(inputs)
+        return self.linear_2(x)
+
 class MLP(keras.layers.Layer):
     def __init__(self):
         super(MLP, self).__init__()

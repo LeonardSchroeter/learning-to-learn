@@ -324,6 +324,9 @@ class LearningToLearn():
     def pretrain(self, steps):
         print(f"Pretrain optimizer for {steps} steps")
 
+        self.reset_optimizer_states()
+        self.clear_objective_weights()
+
         # sampling the already preprocessed gradients from a uniform dist from -1 to 1, 
         # since this is the only values the preprocessed gradients can take
         # then take the inverse to derive at the desired outputs, i.e. simulating sgd
@@ -331,19 +334,23 @@ class LearningToLearn():
         # outputs = preprocess_gradients_inverse(inputs, 10) * -0.001
 
         # need low stddev, because values need to be similar to inputs in later training
-        inputs = tf.random.normal([steps], mean=0.0, stddev=0.001)
-        outputs = inputs * -1.0
-        inputs = self.objective_gradient_preprocessor(inputs)
+        inp = tf.random.normal([steps], mean=0.0, stddev=0.001)
+        outputs = inp * -0.01
+        inputs = self.objective_gradient_preprocessor(inp)
 
         dataset = tf.data.Dataset.from_tensor_slices((inputs, outputs)).batch(self.batch_size, drop_remainder=True)
 
         optimizer = keras.optimizers.Adam()
         optimizer_network = self.optimizer_network_generator()
 
+        asdf = lambda y_true, y_pred: tf.math.reduce_mean(tf.math.abs(y_true - y_pred) * tf.exp(-2 * tf.sign(y_true * y_pred)))
+
         for x, y in dataset.as_numpy_iterator():
             with tf.GradientTape() as tape:
                 out = optimizer_network(x)
-                loss = keras.losses.mean_squared_error(y, out)
+                # print("X: ", x)
+                # print("Out: ", out)
+                loss = asdf(y, out)
             gradients = tape.gradient(loss, optimizer_network.trainable_weights)
             optimizer.apply_gradients(zip(gradients, optimizer_network.trainable_weights))
 

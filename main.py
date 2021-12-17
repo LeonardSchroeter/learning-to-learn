@@ -9,6 +9,8 @@ from src.objectives import MLP, ConvNN, QuadraticFunctionLayer
 from src.optimizer_rnn import LSTMNetworkPerParameter
 from src.train import LearningToLearn
 from src.util import preprocess_gradients
+from tests.mnist_different_activations import mnist_different_activations
+from tests.mnist_multiple_optimizers import mnist_multiple_optimizers
 from tests.mnist_preprocessing import mnist_preprocessing
 from tests.mnist_preprocessing_optimizer import mnist_preprocessing_optimizer
 from tests.quadratic_preprocessing import quadratic_preprocessing
@@ -160,10 +162,17 @@ config_mnist_2 = {
 }
 
 def main():
-    quadratic_preprocessing()
-    mnist_preprocessing()
-    quadratic_preprocessing_optimizer()
-    mnist_preprocessing_optimizer()
+    # tf.random.set_seed(1)
+    # l=LearningToLearn(config_mnist_2)
+    # l.evaluate_optimizer("test", clear_figure=False)
+    # l.pretrain(200_000)
+    # l.evaluate_optimizer("test")
+    # quadratic_preprocessing()
+    # mnist_preprocessing()
+    # quadratic_preprocessing_optimizer()
+    # mnist_preprocessing_optimizer()
+    # mnist_different_activations()
+    mnist_multiple_optimizers()
 
 if __name__ == "__main__":
     main()
