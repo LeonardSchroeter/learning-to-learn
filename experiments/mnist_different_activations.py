@@ -1,6 +1,7 @@
 import math
 
 import matplotlib.pyplot as plt
+import numpy as np
 import tensorflow as tf
 from src.custom_metrics import QuadMetric
 from src.objectives import (MLP, ConvNN, MLPLeakyRelu, MLPRelu, MLPSigmoid,
@@ -11,13 +12,13 @@ from src.util import preprocess_gradients
 from tensorflow import keras
 
 
-def mnist_multiple_optimizers():
+def mnist_different_activations():
     (x_train, y_train), (_, _) = keras.datasets.mnist.load_data()
     mnist_dnn_dataset = tf.data.Dataset.from_tensor_slices((x_train.reshape(60000, 784).astype("float32") / 255, y_train))
 
-    mnist_sigmoid_one = {
-        "config_name": "mnist_sigmoid_one",
-        "objective_network_generator": lambda: MLPSigmoid(),
+    mnist_sigmoid = {
+        "config_name": "mnist_sigmoid",
+        "objective_network_generator": lambda _: MLPSigmoid(),
         "num_layers": 2,
         "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
         "objective_gradient_preprocessor": lambda x: preprocess_gradients(x, 10),
@@ -34,7 +35,7 @@ def mnist_multiple_optimizers():
         "accumulate_losses": tf.add_n,
         "train_optimizer_every_step": False,
 
-        "super_epochs": 25,
+        "super_epochs": 10,
         "epochs": 1,
         "max_steps_per_super_epoch": math.inf,
 
@@ -48,42 +49,9 @@ def mnist_multiple_optimizers():
         "comparison_optimizers": [keras.optimizers.SGD(), keras.optimizers.Adam()],
     }
 
-    mnist_sigmoid_multiple = {
-        "config_name": "mnist_sigmoid_multiple",
-        "objective_network_generator": lambda: MLPSigmoid(),
-        "num_layers": 2,
-        "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
-        "objective_gradient_preprocessor": lambda x: preprocess_gradients(x, 10),
-
-        "dataset": mnist_dnn_dataset,
-        "evaluation_size": 0.2,
-        "batch_size": 128,
-
-        "optimizer_network_generator": lambda: LSTMNetworkPerParameter(0.01, dense_trainable=False),
-        "one_optimizer": False,
-        "preprocess_optimizer_gradients": True,
-        "optimizer_optimizer": keras.optimizers.Adam(),
-        "train_optimizer_steps": 16,
-        "accumulate_losses": tf.add_n,
-        "train_optimizer_every_step": False,
-
-        "super_epochs": 25,
-        "epochs": 1,
-        "max_steps_per_super_epoch": math.inf,
-
-        "evaluate_every_n_epoch": 1,
-        "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
-
-        "save_every_n_epoch": math.inf,
-        "load_weights": False,
-        "load_path": "result",
-
-        "comparison_optimizers": [keras.optimizers.SGD(), keras.optimizers.Adam()],
-    }
-
-    mnist_relu_one = {
-        "config_name": "mnist_relu_one",
-        "objective_network_generator": lambda: MLPRelu(),
+    mnist_relu = {
+        "config_name": "mnist_relu",
+        "objective_network_generator": lambda _: MLPRelu(),
         "num_layers": 2,
         "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
         "objective_gradient_preprocessor": lambda x: preprocess_gradients(x, 10),
@@ -100,7 +68,7 @@ def mnist_multiple_optimizers():
         "accumulate_losses": tf.add_n,
         "train_optimizer_every_step": False,
 
-        "super_epochs": 25,
+        "super_epochs": 10,
         "epochs": 1,
         "max_steps_per_super_epoch": math.inf,
 
@@ -114,9 +82,9 @@ def mnist_multiple_optimizers():
         "comparison_optimizers": [keras.optimizers.SGD(), keras.optimizers.Adam()],
     }
 
-    mnist_relu_multiple = {
-        "config_name": "mnist_relu_multiple",
-        "objective_network_generator": lambda: MLPRelu(),
+    mnist_leaky_relu = {
+        "config_name": "mnist_leaky_relu",
+        "objective_network_generator": lambda _: MLPLeakyRelu(),
         "num_layers": 2,
         "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
         "objective_gradient_preprocessor": lambda x: preprocess_gradients(x, 10),
@@ -126,16 +94,16 @@ def mnist_multiple_optimizers():
         "batch_size": 128,
 
         "optimizer_network_generator": lambda: LSTMNetworkPerParameter(0.01, dense_trainable=False),
-        "one_optimizer": False,
+        "one_optimizer": True,
         "preprocess_optimizer_gradients": True,
         "optimizer_optimizer": keras.optimizers.Adam(),
         "train_optimizer_steps": 16,
         "accumulate_losses": tf.add_n,
         "train_optimizer_every_step": False,
 
-        "super_epochs": 25,
+        "super_epochs": 5,
         "epochs": 1,
-        "max_steps_per_super_epoch": math.inf,
+        "max_steps_per_super_epoch": 160,
 
         "evaluate_every_n_epoch": 1,
         "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
@@ -147,24 +115,88 @@ def mnist_multiple_optimizers():
         "comparison_optimizers": [keras.optimizers.SGD(), keras.optimizers.Adam()],
     }
 
-    plt.rcParams['text.usetex'] = True
-    plt.rcParams.update({'font.size': 20})
-    plt.subplots_adjust(bottom=0.15, top=0.9)
+    mnist_tanh = {
+        "config_name": "mnist_tanh",
+        "objective_network_generator": lambda _: MLPTanh(),
+        "num_layers": 2,
+        "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
+        "objective_gradient_preprocessor": lambda x: preprocess_gradients(x, 10),
 
-    tf.random.set_seed(6)
+        "dataset": mnist_dnn_dataset,
+        "evaluation_size": 0.2,
+        "batch_size": 128,
 
-    ltl_1 = LearningToLearn(mnist_sigmoid_one)
-    ltl_1.train_optimizer()
-    ltl_1.evaluate_optimizer("1", label="One Optimizer", clear_figure=False)
+        "optimizer_network_generator": lambda: LSTMNetworkPerParameter(0.01, dense_trainable=False),
+        "one_optimizer": True,
+        "preprocess_optimizer_gradients": True,
+        "optimizer_optimizer": keras.optimizers.Adam(),
+        "train_optimizer_steps": 16,
+        "accumulate_losses": tf.add_n,
+        "train_optimizer_every_step": False,
 
-    ltl_1 = LearningToLearn(mnist_sigmoid_multiple)
-    ltl_1.train_optimizer()
-    ltl_1.evaluate_optimizer("1", label="Multiple Optimizers")
+        "super_epochs": 5,
+        "epochs": 1,
+        "max_steps_per_super_epoch": 160,
 
-    ltl_1 = LearningToLearn(mnist_relu_one)
-    ltl_1.train_optimizer()
-    ltl_1.evaluate_optimizer("1", label="One Optimizer", clear_figure=False)
+        "evaluate_every_n_epoch": 1,
+        "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
 
-    ltl_1 = LearningToLearn(mnist_relu_multiple)
-    ltl_1.train_optimizer()
-    ltl_1.evaluate_optimizer("1", label="Multiple Optimizers")
+        "save_every_n_epoch": math.inf,
+        "load_weights": False,
+        "load_path": "result",
+
+        "comparison_optimizers": [keras.optimizers.SGD(), keras.optimizers.Adam()],
+    }
+
+    # losses = []
+    w = None
+
+    # for i in range(10):
+    #     tf.random.set_seed(i)
+
+    #     ltl = LearningToLearn(mnist_sigmoid)
+    #     ltl.train_optimizer()
+    #     l, w = ltl.evaluate_optimizer("test", label="Sigmoid", objective_network_weights=w)
+
+    #     losses.append(l)
+
+    # np.savetxt("tmp/mnist_different_sigmoid_losses.csv", losses, delimiter=",")
+
+    losses = []
+    
+    for i in range(100):
+        tf.random.set_seed(i)
+
+        ltl = LearningToLearn(mnist_tanh)
+        ltl.train_optimizer()
+        l, w = ltl.evaluate_optimizer("test", label="Tanh", objective_network_weights=w)
+
+        losses.append(l)
+
+    np.savetxt("tmp/mnist_tanh_default.csv", losses, delimiter=",")
+
+    # losses = []
+
+    # for i in range(10):
+    #     tf.random.set_seed(i)
+
+    #     ltl = LearningToLearn(mnist_relu)
+    #     ltl.train_optimizer()
+    #     l, w = ltl.evaluate_optimizer("test", label="Relu", objective_network_weights=w)
+
+    #     losses.append(l)
+
+    # np.savetxt("tmp/mnist_different_relu_losses.csv", losses, delimiter=",")
+
+    losses = []
+
+    for i in range(100):
+        tf.random.set_seed(i)
+
+        ltl = LearningToLearn(mnist_leaky_relu)
+        ltl.train_optimizer()
+        l, w = ltl.evaluate_optimizer("test", label="Leaky Relu", objective_network_weights=w)
+
+        losses.append(l)
+
+    np.savetxt("tmp/mnist_leaky_relu_default.csv", losses, delimiter=",")

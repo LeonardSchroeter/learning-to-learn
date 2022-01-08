@@ -2,6 +2,8 @@ import tensorflow as tf
 from tensorflow import keras
 
 
+# Optimizer network structure
+# dense_trainable = False was used for all tests in the thesis
 class LSTMNetworkPerParameter(keras.Model):
     def __init__(self, learning_rate = 1, dense_trainable = True, **kwargs):
         super(LSTMNetworkPerParameter, self).__init__(**kwargs)

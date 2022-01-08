@@ -13,9 +13,12 @@ from tensorflow import keras
 def quadratic_preprocessing_optimizer():
     quadratic_dataset = tf.data.Dataset.from_tensor_slices((tf.zeros([640]), tf.zeros([640])))
 
+    W = tf.random.normal([16, 16])
+    y = tf.random.normal([16])
+
     config_quad_preprocessing_optimizer = {
         "config_name": "quadratic_preprocessing_optimizer",
-        "objective_network_generator": lambda: QuadraticFunctionLayer(16),
+        "objective_network_generator": lambda same: QuadraticFunctionLayer(16, same, W, y),
         "num_layers": 1,
         "objective_loss_fn": lambda y_true, y_pred: y_pred,
         "objective_gradient_preprocessor": lambda x: x,
@@ -48,7 +51,7 @@ def quadratic_preprocessing_optimizer():
 
     config_quad_preprocessing_no_optimizer = {
         "config_name": "quadratic_no_preprocessing_optimizer",
-        "objective_network_generator": lambda: QuadraticFunctionLayer(16),
+        "objective_network_generator": lambda same: QuadraticFunctionLayer(16, same, W, y),
         "num_layers": 1,
         "objective_loss_fn": lambda y_true, y_pred: y_pred,
         "objective_gradient_preprocessor": lambda x: x,
@@ -79,17 +82,12 @@ def quadratic_preprocessing_optimizer():
         "comparison_optimizers": [keras.optimizers.SGD(), keras.optimizers.Adam()],
     }
 
-    plt.rcParams['text.usetex'] = True
-    plt.rcParams.update({'font.size': 20})
-    plt.subplots_adjust(bottom=0.15, top=0.9)
+    tf.random.set_seed(1)
 
-    tf.random.set_seed(3)
-
-    ltl_1 = LearningToLearn(config_quad_preprocessing_no_optimizer)
-    ltl_1.evaluate_optimizer("0")
-    ltl_1.train_optimizer()
-    ltl_1.evaluate_optimizer("1", label="Without Preprocessing", clear_figure=False)
-
-    ltl_2 = LearningToLearn(config_quad_preprocessing_optimizer)
+    ltl_2 = LearningToLearn(config_quad_preprocessing_no_optimizer)
     ltl_2.train_optimizer()
-    ltl_2.evaluate_optimizer("1", label="With Preprocessing")
+    _, weights = ltl_2.evaluate_optimizer("test", label="Without Preprocessing", clear_figure=False)
+
+    ltl_1 = LearningToLearn(config_quad_preprocessing_optimizer)
+    ltl_1.train_optimizer()
+    _, weights = ltl_1.evaluate_optimizer("test", label="With Preprocessing", clear_figure=False, objective_network_weights=weights)

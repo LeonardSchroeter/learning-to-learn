@@ -1,21 +1,27 @@
 import math
 
-import matplotlib.pyplot as plt
 import tensorflow as tf
 from tensorflow import keras
 
+from experiments.mnist_different_activations import mnist_different_activations
+from experiments.mnist_large_number_steps import mnist_large
+from experiments.mnist_multiple_optimizers import mnist_multiple_optimizers
+from experiments.mnist_preprocessing import mnist_preprocessing
+from experiments.mnist_preprocessing_optimizer import \
+    mnist_preprocessing_optimizer
+from experiments.mnist_pretraining import mnist_pretraining
+from experiments.mnist_unroll import mnist_unroll
+from experiments.quadratic_large_number_steps import quadratic_large
+from experiments.quadratic_preprocessing import quadratic_preprocessing
+from experiments.quadratic_preprocessing_optimizer import \
+    quadratic_preprocessing_optimizer
+from experiments.quadratic_unroll import quadratic_unroll
+from experiments.quadratic_weights import quadratic_weights
 from src.custom_metrics import QuadMetric
 from src.objectives import MLP, ConvNN, QuadraticFunctionLayer
 from src.optimizer_rnn import LSTMNetworkPerParameter
 from src.train import LearningToLearn
 from src.util import preprocess_gradients
-from tests.mnist_different_activations import mnist_different_activations
-from tests.mnist_multiple_optimizers import mnist_multiple_optimizers
-from tests.mnist_preprocessing import mnist_preprocessing
-from tests.mnist_preprocessing_optimizer import mnist_preprocessing_optimizer
-from tests.quadratic_preprocessing import quadratic_preprocessing
-from tests.quadratic_preprocessing_optimizer import \
-    quadratic_preprocessing_optimizer
 
 ################################################################################
 # config parameters
@@ -86,93 +92,19 @@ config_empty = {
     "comparison_optimizers": [],
 }
 
-(x_train, y_train), (_, _) = keras.datasets.mnist.load_data()
-mnist_dataset = tf.data.Dataset.from_tensor_slices((x_train.reshape(60000, 28, 28, 1).astype("float32") / 255, y_train))
-
-(x_train, y_train), (_, _) = keras.datasets.mnist.load_data()
-mnist_dnn_dataset = tf.data.Dataset.from_tensor_slices((x_train.reshape(60000, 784).astype("float32") / 255, y_train))
-
-(x_train, y_train), (_, _) = keras.datasets.fashion_mnist.load_data()
-fashion_mnist_dataset = tf.data.Dataset.from_tensor_slices((x_train.reshape(60000, 28, 28, 1).astype("float32") / 255, y_train))
-
-quadratic_dataset = tf.data.Dataset.from_tensor_slices((tf.zeros([640]), tf.zeros([640])))
-
-# config for mnist no preprocessing
-# good seed: 8
-config_mnist = {
-    "config_name": "mnist",
-    "objective_network_generator": lambda: ConvNN(),
-    "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
-    "objective_gradient_preprocessor": lambda x: x,
-
-    "dataset": mnist_dataset,
-    "evaluation_size": 0.2,
-    "batch_size": 64,
-
-    "optimizer_network_generator": lambda: LSTMNetworkPerParameter(0.1),
-    "optimizer_optimizer": keras.optimizers.Adam(),
-    "train_optimizer_steps": 16,
-    "accumulate_losses": tf.add_n,
-    "train_optimizer_every_step": False,
-
-    "super_epochs": 1,
-    "epochs": 1,
-    "max_steps_per_super_epoch": math.inf,
-
-    "evaluate_every_n_epoch": 1,
-    "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
-
-    "save_every_n_epoch": math.inf,
-    "load_weights": False,
-    "load_path": "result",
-
-    "comparison_optimizers": [keras.optimizers.Adam()],
-}
-
-config_mnist_2 = {
-    "config_name": "mnist_preprocessing",
-    "objective_network_generator": lambda: MLP(),
-    "num_layers": 2,
-    "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
-    "objective_gradient_preprocessor": lambda x: preprocess_gradients(x, 10),
-
-    "dataset": mnist_dnn_dataset,
-    "evaluation_size": 0.2,
-    "batch_size": 128,
-
-    "optimizer_network_generator": lambda: LSTMNetworkPerParameter(0.01, dense_trainable=False),
-    "one_optimizer": True,
-    "optimizer_optimizer": keras.optimizers.Adam(),
-    "train_optimizer_steps": 16,
-    "accumulate_losses": tf.add_n,
-    "train_optimizer_every_step": False,
-
-    "super_epochs": 25,
-    "epochs": 1,
-    "max_steps_per_super_epoch": math.inf,
-
-    "evaluate_every_n_epoch": 1,
-    "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
-
-    "save_every_n_epoch": math.inf,
-    "load_weights": False,
-    "load_path": "result",
-
-    "comparison_optimizers": [keras.optimizers.SGD(), keras.optimizers.Adam()],
-}
-
 def main():
-    # tf.random.set_seed(1)
-    # l=LearningToLearn(config_mnist_2)
-    # l.evaluate_optimizer("test", clear_figure=False)
-    # l.pretrain(200_000)
-    # l.evaluate_optimizer("test")
-    # quadratic_preprocessing()
-    # mnist_preprocessing()
-    # quadratic_preprocessing_optimizer()
-    # mnist_preprocessing_optimizer()
-    # mnist_different_activations()
+    quadratic_preprocessing()
+    mnist_preprocessing()
+    quadratic_preprocessing_optimizer()
+    mnist_preprocessing_optimizer()
+    mnist_different_activations()
     mnist_multiple_optimizers()
+    quadratic_unroll()
+    mnist_unroll()
+    quadratic_weights()
+    mnist_pretraining()
+    quadratic_large()
+    mnist_large()
 
 if __name__ == "__main__":
     main()

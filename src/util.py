@@ -7,6 +7,8 @@ class Util():
         self.dict_structure = None
         self.sizes_shapes = None
 
+    # converts a nested weights dict to a flat tensor
+    # stores the dict structure and the shapes of the tensors in self.dict_structure and self.sizes_shapes to be able to convert back to dict
     def to_1d(self, weight_dict):
         sizes_shapes = []
         weights_1d = []
@@ -26,6 +28,7 @@ class Util():
 
         return all_weights_1d
 
+    # converts a flat tensor back to a nested weights dict
     def from_1d(self, tensor_1d):
         if not self.dict_structure or not self.sizes_shapes:
             raise Exception("You have to call to_1d before transforming back to dict!")
@@ -42,6 +45,8 @@ class Util():
                 i += 1
         return result_dict
 
+    # converts a nested weights dict to one flat tensor for each layer
+    # stores the dict structure and the shapes of the tensors in self.dict_structure_per and self.sizes_shapes_per to be able to convert back to dict
     def to_1d_per_layer(self, weight_dict):
         dict_structure = {}
         sizes_shapes = []
@@ -67,6 +72,7 @@ class Util():
 
         return result
 
+    # converts one flat tensor per layer back to a nested weights dict
     def from_1d_per_layer(self, tensor_arr):
         if not self.dict_structure_per or not self.sizes_shapes_per:
             raise Exception("You have to call to_1d before transforming back to dict!")
@@ -86,6 +92,7 @@ class Util():
                 i += 1
         return result_dict
 
+# preprocessing function for the gradients of the objective function
 @tf.function
 def preprocess_gradients(gradients, p):
     tf_p = tf.constant(p, dtype=tf.float32)
@@ -98,6 +105,9 @@ def preprocess_gradients(gradients, p):
 
     return tf.where(cond, x=x, y=y)
 
+# inverse preprocessing function
+# used to convert the gradients of the objective function back to the original space
+# we tried to use it to get a suitable pretraining domain but setting a normal distibution lead to better results
 @tf.function
 def preprocess_gradients_inverse(gradients, p):
     tf_p = tf.constant(p, dtype=tf.float32)
@@ -105,12 +115,13 @@ def preprocess_gradients_inverse(gradients, p):
 
     return -1 * tf.sign(gradients) * tf.pow(tf_e, -1 * tf_p * tf.abs(gradients))
 
+# add a list of tensors weighted by the given weights
+# used to sum the timesteps of the objective function in the experiments testing different weighting schemes
+def weighted_sum(tensor_list, beta):
+    num = len(tensor_list)
+    weights = tf.linspace(1.0, beta * num + 1.0 - beta, num)
+
+    return tf.reduce_sum(tf.stack(tensor_list, axis=0) * weights, axis=0)
+
 if __name__ == "__main__":
-    plt.rcParams['text.usetex'] = True
-    x = tf.range(-6.0, 6.0, 0.00001)
-    y = preprocess_gradients(x, 10)
-    plt.plot(x, y)
-    plt.grid(True)
-    plt.ylabel(r"$\rho$")
-    plt.xlabel(r"$\nabla^1_t$")
-    plt.show()
+    pass
