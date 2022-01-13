@@ -1,14 +1,13 @@
 import math
 
-import matplotlib.pyplot as plt
 import tensorflow as tf
 from src.custom_metrics import QuadMetric
-from src.objectives import (MLP, ConvNN, MLPLeakyRelu, MLPRelu, MLPSigmoid,
-                            MLPTanh, QuadraticFunctionLayer)
+from src.objectives import QuadraticFunctionLayer
 from src.optimizer_rnn import LSTMNetworkPerParameter
-from src.train import LearningToLearn
-from src.util import preprocess_gradients, weighted_sum
+from src.util import weighted_sum
 from tensorflow import keras
+
+from experiments.util import experiment
 
 
 def quadratic_weights():
@@ -140,20 +139,5 @@ def quadratic_weights():
         "load_path": "result",
     }
 
-    tf.random.set_seed(1)
-
-    ltl_2 = LearningToLearn(quadratic_weights_1_every)
-    ltl_2.train_optimizer()
-    _, weights = ltl_2.evaluate_optimizer("test", label="$w_t = 1$", clear_figure=False)
-
-    ltl_1 = LearningToLearn(quadratic_weights_inc_every)
-    ltl_1.train_optimizer()
-    _, weights = ltl_1.evaluate_optimizer("test", label="$w_t = \\beta t + 1$", objective_network_weights=weights)
-
-    ltl_3 = LearningToLearn(quadratic_weights_1_once)
-    ltl_3.train_optimizer()
-    _, weights = ltl_3.evaluate_optimizer("test", label="$w_t = 1$", clear_figure=False, objective_network_weights=weights)
-
-    ltl_4 = LearningToLearn(quadratic_weights_inc_once)
-    ltl_4.train_optimizer()
-    _, weights = ltl_4.evaluate_optimizer("test", label="$w_t = \\beta t + 1$", objective_network_weights=weights)
+    experiment([quadratic_weights_1_every, quadratic_weights_inc_every], ["$w_t = 1$", "$w_t = \\beta t + 1$"], 10, "quadratic_weights_every")
+    experiment([quadratic_weights_1_once, quadratic_weights_inc_once], ["$w_t = 1$", "$w_t = \\beta t + 1$"], 10, "quadratic_weights_once")

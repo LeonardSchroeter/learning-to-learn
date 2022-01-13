@@ -1,12 +1,9 @@
 import math
 
-import matplotlib.pyplot as plt
-import numpy as np
 import tensorflow as tf
-from src.custom_metrics import QuadMetric
-from src.objectives import (MLP, ConvNN, MLPLeakyRelu, MLPRelu, MLPSigmoid,
-                            MLPTanh, QuadraticFunctionLayer)
+from src.objectives import MLP
 from src.optimizer_rnn import LSTMNetworkPerParameter
+from src.plot import plot
 from src.train import LearningToLearn
 from src.util import preprocess_gradients
 from tensorflow import keras
@@ -82,13 +79,40 @@ def mnist_large():
         "comparison_optimizers": [keras.optimizers.SGD(), keras.optimizers.Adam()],
     }
 
-    tf.random.set_seed(4)
+    best1 = [math.inf]
+    bestltl = None
+    weights = None
+    for i in range(10):
+        tf.random.set_seed(i)
+        ltl = LearningToLearn(mnist_def)
+        ltl.train_optimizer()
+        losses, weights = ltl.evaluate_optimizer(objective_network_weights=weights)
+        if losses[-1] < best1[-1]:
+            best1 = losses
+            bestltl = ltl
+    
+    best2 = [math.inf]
+    bestltl2 = None
+    for i in range(10):
+        tf.random.set_seed(i)
+        ltl = LearningToLearn(mnist_large)
+        ltl.train_optimizer()
+        losses, weights = ltl.evaluate_optimizer(objective_network_weights=weights)
+        if losses[-1] < best2[-1]:
+            best2 = losses
+            bestltl2 = ltl
 
-    ltl = LearningToLearn(mnist_def)
-    ltl.train_optimizer()
-    l, w = ltl.evaluate_optimizer("t2", label="1 epoch", clear_figure=False)
+    losses, weights = bestltl.evaluate_optimizer()
+    plot(losses, label="1 epoch", filename="tmp", clear_figure=False)
 
-    ltl2 = LearningToLearn(mnist_large)
-    ltl2.train_optimizer()
-    ltl2.epochs = 1
-    l2, w2 = ltl2.evaluate_optimizer("t2", label="10 epochs", objective_network_weights=w)
+    bestltl2.epochs = 1
+    losses, weights = bestltl2.evaluate_optimizer(objective_network_weights=weights)
+    plot(losses, label="10 epochs", filename="mnist_large_number_steps_1")
+
+    bestltl.epochs = 10
+    losses, weights = bestltl.evaluate_optimizer(objective_network_weights=weights)
+    plot(losses, label="1 epoch", filename="tmp", clear_figure=False)
+
+    bestltl2.epochs = 10
+    losses, weights = bestltl2.evaluate_optimizer(objective_network_weights=weights)
+    plot(losses, label="10 epochs", filename="mnist_large_number_steps_2")

@@ -1,13 +1,13 @@
 import math
 
-import matplotlib.pyplot as plt
 import tensorflow as tf
 from src.custom_metrics import QuadMetric
-from src.objectives import MLP, ConvNN, QuadraticFunctionLayer
+from src.objectives import QuadraticFunctionLayer
 from src.optimizer_rnn import LSTMNetworkPerParameter
-from src.train import LearningToLearn
 from src.util import preprocess_gradients
 from tensorflow import keras
+
+from experiments.util import experiment, train_multiple
 
 
 def quadratic_preprocessing():
@@ -80,12 +80,4 @@ def quadratic_preprocessing():
         "comparison_optimizers": [keras.optimizers.SGD(), keras.optimizers.Adam()],
     } 
 
-    tf.random.set_seed(1)
-
-    ltl_2 = LearningToLearn(config_quad_no_preprocessing)
-    ltl_2.train_optimizer()
-    _, weights = ltl_2.evaluate_optimizer("test", label="Without Preprocessing", clear_figure=False)
-
-    ltl_1 = LearningToLearn(config_quad_preprocessing)
-    ltl_1.train_optimizer()
-    _, weights = ltl_1.evaluate_optimizer("test", label="With Preprocessing", clear_figure=False, objective_network_weights=weights)
+    experiment([config_quad_no_preprocessing, config_quad_preprocessing], ["Without Preprocessing", "With Preprocessing"], 10, "quadratic_preprocessing")

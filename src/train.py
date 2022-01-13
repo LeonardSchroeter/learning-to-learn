@@ -1,7 +1,5 @@
 import os
 
-from .plot import plot
-
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 import copy
@@ -290,7 +288,7 @@ class LearningToLearn():
         print("  Accuracy: ", self.evaluation_metric.result().numpy())
     
     # evaluate optimizer by training the objective function with the optimizer and evaluating the objective function
-    def evaluate_optimizer(self, filename, label = "Loss", clear_figure = True, objective_network_weights = None):
+    def evaluate_optimizer(self, objective_network_weights = None):
         print("Evaluate optimizer")
 
         self.reset_optimizer_states()
@@ -333,14 +331,6 @@ class LearningToLearn():
             steps_left = steps_left_new
             if steps_left == 0:
                 break
-        
-        if filename:
-            path = f"{self.config_name}_{filename}"
-        else:
-            path = self.config_name
-
-        # plot losses of the objective function
-        plot(all_losses, label, path, clear_figure)
 
         return all_losses, weights_copy
 

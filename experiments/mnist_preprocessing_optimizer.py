@@ -1,14 +1,12 @@
 import math
 
-import matplotlib.pyplot as plt
-import numpy as np
 import tensorflow as tf
-from src.custom_metrics import QuadMetric
-from src.objectives import MLP, ConvNN, QuadraticFunctionLayer
+from src.objectives import MLP
 from src.optimizer_rnn import LSTMNetworkPerParameter
-from src.train import LearningToLearn
 from src.util import preprocess_gradients
 from tensorflow import keras
+
+from experiments.util import experiment
 
 
 def mnist_preprocessing_optimizer():
@@ -81,29 +79,4 @@ def mnist_preprocessing_optimizer():
         "comparison_optimizers": [keras.optimizers.SGD(), keras.optimizers.Adam()],
     }
 
-    losses = []
-    w = None
-
-    for i in range(10):
-        tf.random.set_seed(i)
-
-        ltl = LearningToLearn(mnist_no_preprocessing)
-        ltl.train_optimizer()
-        l, w = ltl.evaluate_optimizer("test", label="Without Preprocessing", objective_network_weights=w)
-
-        losses.append(l)
-
-    np.savetxt("tmp/mnist_no_pre_opt_losses.csv", losses, delimiter=",")
-
-    losses = []
-    
-    for i in range(10):
-        tf.random.set_seed(i)
-
-        ltl = LearningToLearn(mnist_preprocessing)
-        ltl.train_optimizer()
-        l, w = ltl.evaluate_optimizer("test", label="With Preprocessing", objective_network_weights=w)
-
-        losses.append(l)
-
-    np.savetxt("tmp/mnist_pre_opt_losses.csv", losses, delimiter=",")
+    experiment([mnist_no_preprocessing, mnist_preprocessing], ["Without Preprocessing", "With Preprocessing"], 10, "mnist_preprocessing_optimizer")

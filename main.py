@@ -3,13 +3,11 @@ import math
 import tensorflow as tf
 from tensorflow import keras
 
-from experiments.mnist_different_activations import mnist_different_activations
 from experiments.mnist_large_number_steps import mnist_large
-from experiments.mnist_multiple_optimizers import mnist_multiple_optimizers
 from experiments.mnist_preprocessing import mnist_preprocessing
 from experiments.mnist_preprocessing_optimizer import \
     mnist_preprocessing_optimizer
-from experiments.mnist_pretraining import mnist_pretraining
+from experiments.mnist_problems import mnist_problems
 from experiments.mnist_unroll import mnist_unroll
 from experiments.quadratic_large_number_steps import quadratic_large
 from experiments.quadratic_preprocessing import quadratic_preprocessing
@@ -17,11 +15,6 @@ from experiments.quadratic_preprocessing_optimizer import \
     quadratic_preprocessing_optimizer
 from experiments.quadratic_unroll import quadratic_unroll
 from experiments.quadratic_weights import quadratic_weights
-from src.custom_metrics import QuadMetric
-from src.objectives import MLP, ConvNN, QuadraticFunctionLayer
-from src.optimizer_rnn import LSTMNetworkPerParameter
-from src.train import LearningToLearn
-from src.util import preprocess_gradients
 
 ################################################################################
 # config parameters
@@ -93,18 +86,28 @@ config_empty = {
 }
 
 def main():
-    quadratic_preprocessing()
-    mnist_preprocessing()
-    quadratic_preprocessing_optimizer()
-    mnist_preprocessing_optimizer()
-    mnist_different_activations()
-    mnist_multiple_optimizers()
-    quadratic_unroll()
-    mnist_unroll()
-    quadratic_weights()
-    mnist_pretraining()
+    # experiments for the thesis
+    # resulting plots are saved in the "plots" folder which needs to exists
+    # section 5.2
     quadratic_large()
+    # section 5.2
     mnist_large()
+    # section 5.3.1
+    quadratic_preprocessing()
+    # section 5.3.1
+    mnist_preprocessing()
+    # section 5.3.2
+    quadratic_preprocessing_optimizer()
+    # section 5.3.2
+    mnist_preprocessing_optimizer()
+    # all tests from subsections of section 5.4
+    mnist_problems()
+    # section 5.5.2
+    quadratic_unroll()
+    # section 5.5.2
+    mnist_unroll()
+    # section 5.6
+    quadratic_weights()
 
 if __name__ == "__main__":
     main()

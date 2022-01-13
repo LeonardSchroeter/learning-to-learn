@@ -1,14 +1,12 @@
 import math
 
-import matplotlib.pyplot as plt
 import tensorflow as tf
 from src.custom_metrics import QuadMetric
-from src.objectives import (MLP, ConvNN, MLPLeakyRelu, MLPRelu, MLPSigmoid,
-                            MLPTanh, QuadraticFunctionLayer)
+from src.objectives import QuadraticFunctionLayer
 from src.optimizer_rnn import LSTMNetworkPerParameter
-from src.train import LearningToLearn
-from src.util import preprocess_gradients
 from tensorflow import keras
+
+from experiments.util import experiment
 
 
 def quadratic_unroll():
@@ -113,20 +111,4 @@ def quadratic_unroll():
 
     }
 
-    plt.rcParams['text.usetex'] = True
-    plt.rcParams.update({'font.size': 20})
-    plt.subplots_adjust(bottom=0.15, top=0.9)
-
-    tf.random.set_seed(1)
-
-    ltl_2 = LearningToLearn(quadratic_unroll_8)
-    ltl_2.train_optimizer()
-    _, weights = ltl_2.evaluate_optimizer("test", label="$T$ = 8", clear_figure=False)
-
-    ltl_1 = LearningToLearn(quadratic_unroll_16)
-    ltl_1.train_optimizer()
-    _, weights = ltl_1.evaluate_optimizer("test", label="$T$ = 16", clear_figure=False, objective_network_weights=weights)
-
-    ltl_3 = LearningToLearn(quadratic_unroll_32)
-    ltl_3.train_optimizer()
-    ltl_3.evaluate_optimizer("test", label="$T$ = 32", objective_network_weights=weights)
+    experiment([quadratic_unroll_8, quadratic_unroll_16, quadratic_unroll_32], ["$T$ = 8", "$T$ = 16", "$T$ = 32"], 10, "quadratic_unroll")

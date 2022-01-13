@@ -1,13 +1,11 @@
 import math
 
-import matplotlib.pyplot as plt
 import tensorflow as tf
 from src.custom_metrics import QuadMetric
-from src.objectives import (MLP, ConvNN, MLPLeakyRelu, MLPRelu, MLPSigmoid,
-                            MLPTanh, QuadraticFunctionLayer)
+from src.objectives import QuadraticFunctionLayer
 from src.optimizer_rnn import LSTMNetworkPerParameter
+from src.plot import plot
 from src.train import LearningToLearn
-from src.util import preprocess_gradients
 from tensorflow import keras
 
 
@@ -86,12 +84,25 @@ def quadratic_large():
 
     ltl_2 = LearningToLearn(quadratic_normal)
     ltl_2.train_optimizer()
-    _, weights = ltl_2.evaluate_optimizer("test", label="320 steps", clear_figure=False)
 
     ltl_1 = LearningToLearn(quadratic_large)
     ltl_1.train_optimizer()
 
+
+    losses, weights = ltl_2.evaluate_optimizer()
+    plot(losses, label="320 steps", filename="tmp", clear_figure=False)
+
     ltl_1.dataset = quadratic_dataset
     ltl_1.max_steps_per_super_epoch = 320
+    losses, weights = ltl_1.evaluate_optimizer(objective_network_weights=weights)
+    plot(losses, label="3200 steps", filename="quadratic_large_number_steps_1")
 
-    _, weights = ltl_1.evaluate_optimizer("test", label="3200 steps", objective_network_weights=weights)
+    ltl_2.dataset = quadratic_dataset_large
+    ltl_2.max_steps_per_super_epoch = 3200
+    losses, weights = ltl_2.evaluate_optimizer(objective_network_weights=weights)
+    plot(losses, label="320 steps", filename="tmp", clear_figure=False)
+
+    ltl_1.dataset = quadratic_dataset_large
+    ltl_1.max_steps_per_super_epoch = 3200
+    losses, weights = ltl_1.evaluate_optimizer(objective_network_weights=weights)
+    plot(losses, label="3200 steps", filename="quadratic_large_number_steps_2")

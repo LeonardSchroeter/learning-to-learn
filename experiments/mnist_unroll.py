@@ -1,15 +1,12 @@
 import math
 
-import matplotlib.pyplot as plt
-import numpy as np
 import tensorflow as tf
-from src.custom_metrics import QuadMetric
-from src.objectives import (MLP, ConvNN, MLPLeakyRelu, MLPRelu, MLPSigmoid,
-                            MLPTanh, QuadraticFunctionLayer)
+from src.objectives import MLP
 from src.optimizer_rnn import LSTMNetworkPerParameter
-from src.train import LearningToLearn
 from src.util import preprocess_gradients
 from tensorflow import keras
+
+from experiments.util import experiment
 
 
 def mnist_unroll():
@@ -109,42 +106,4 @@ def mnist_unroll():
         "load_path": "result",
     }
 
-    losses = []
-    w = None
-
-    for i in range(10):
-        tf.random.set_seed(i)
-
-        ltl = LearningToLearn(mnist_unroll_8)
-        ltl.train_optimizer()
-        l, w = ltl.evaluate_optimizer("0", label="$T$ = 8", objective_network_weights=w)
-
-        losses.append(l)
-
-    np.savetxt("tmp/mnist_unroll_8_losses.csv", losses, delimiter=",")
-
-    losses = []
-    
-    for i in range(10):
-        tf.random.set_seed(i)
-
-        ltl = LearningToLearn(mnist_unroll_16)
-        ltl.train_optimizer()
-        l, w = ltl.evaluate_optimizer("0", label="$T$ = 16", objective_network_weights=w)
-
-        losses.append(l)
-
-    np.savetxt("tmp/mnist_unroll_16_losses.csv", losses, delimiter=",")
-
-    losses = []
-
-    for i in range(10):
-        tf.random.set_seed(i)
-
-        ltl = LearningToLearn(mnist_unroll_32)
-        ltl.train_optimizer()
-        l, w = ltl.evaluate_optimizer("0", label="$T$ = 32", objective_network_weights=w)
-
-        losses.append(l)
-
-    np.savetxt("tmp/mnist_unroll_32_losses.csv", losses, delimiter=",")
+    experiment([mnist_unroll_8, mnist_unroll_16, mnist_unroll_32], ["$T$ = 8", "$T$ = 16", "$T$ = 32"], 10, "mnist_unroll")
