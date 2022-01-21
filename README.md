@@ -7,3 +7,6 @@ The needed dependencies can be installed with:
 ```
 pip install -r requirements.txt
 ```
+
+The experiments are listed in main.py. 
+The class `LearningToLearn` in src/train.py contains the core learning to learn algorithm. 
