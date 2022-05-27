@@ -19,7 +19,6 @@ from experiments.quadratic_weights import quadratic_weights
 ################################################################################
 # config parameters
 ################################################################################
-# config_name - name of the config - required
 # objective_network_generator - callable that returns a network for training the objective - required
 # num_layers - number of layers in the objective network - default: 1
 # objective_loss_fn - a tensorflow loss function - required
@@ -44,16 +43,11 @@ from experiments.quadratic_weights import quadratic_weights
 # evaluate_every_n_epoch - evaluate the model every n epochs - default: 1
 # evaluation_metric - a tensorflow metric object - required
 
-# save_every_n_epoch - save the model every n epochs - default: math.inf
-# load_weights - boolean whether to load weights from a previous run - default: False
-# load_path - name of file to load weights from - default: "result"
-
 # comparison_optimizers - list of optimizers to compare with - default: []
 ################################################################################
 
-# empty config which can be used to create a new config
+# empty config for reference
 config_empty = {
-    "config_name": None,
     "objective_network_generator": None,
     "num_layers": 1,
     "objective_loss_fn": None,
@@ -77,10 +71,6 @@ config_empty = {
 
     "evaluate_every_n_epoch": 1,
     "evaluation_metric": None,
-
-    "save_every_n_epoch": math.inf,
-    "load_weights": False,
-    "load_path": "result",
 
     "comparison_optimizers": [],
 }

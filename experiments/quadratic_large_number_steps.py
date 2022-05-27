@@ -1,5 +1,3 @@
-import math
-
 import tensorflow as tf
 from src.custom_metrics import QuadMetric
 from src.objectives import QuadraticFunctionLayer
@@ -17,7 +15,6 @@ def quadratic_large():
     y = tf.random.normal([16])
 
     quadratic_normal = {
-        "config_name": "quadratic_normal",
         "objective_network_generator": lambda same: QuadraticFunctionLayer(16, same, W, y),
         "num_layers": 1,
         "objective_loss_fn": lambda y_true, y_pred: y_pred,
@@ -41,15 +38,9 @@ def quadratic_large():
 
         "evaluate_every_n_epoch": 1,
         "evaluation_metric": QuadMetric(),
-
-        "save_every_n_epoch": math.inf,
-        "load_weights": False,
-        "load_path": "result",
-
     }
 
     quadratic_large = {
-        "config_name": "quadratic_large",
         "objective_network_generator": lambda same: QuadraticFunctionLayer(16, same, W, y),
         "num_layers": 1,
         "objective_loss_fn": lambda y_true, y_pred: y_pred,
@@ -73,11 +64,6 @@ def quadratic_large():
 
         "evaluate_every_n_epoch": 1,
         "evaluation_metric": QuadMetric(),
-
-        "save_every_n_epoch": math.inf,
-        "load_weights": False,
-        "load_path": "result",
-
     }
 
     tf.random.set_seed(1)

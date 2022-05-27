@@ -14,7 +14,6 @@ def mnist_problems():
     mnist_dnn_dataset = tf.data.Dataset.from_tensor_slices((x_train.reshape(60000, 784).astype("float32") / 255, y_train))
 
     mnist_sigmoid = {
-        "config_name": "mnist_sigmoid",
         "objective_network_generator": lambda _: MLPSigmoid(),
         "num_layers": 2,
         "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
@@ -38,16 +37,11 @@ def mnist_problems():
 
         "evaluate_every_n_epoch": 1,
         "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
-
-        "save_every_n_epoch": math.inf,
-        "load_weights": False,
-        "load_path": "result",
 
         "comparison_optimizers": [keras.optimizers.SGD(), keras.optimizers.Adam()],
     }
 
     mnist_relu = {
-        "config_name": "mnist_relu",
         "objective_network_generator": lambda _: MLPRelu(),
         "num_layers": 2,
         "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
@@ -71,16 +65,11 @@ def mnist_problems():
 
         "evaluate_every_n_epoch": 1,
         "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
-
-        "save_every_n_epoch": math.inf,
-        "load_weights": False,
-        "load_path": "result",
 
         "comparison_optimizers": [keras.optimizers.SGD(), keras.optimizers.Adam()],
     }
 
     mnist_leaky_relu = {
-        "config_name": "mnist_leaky_relu",
         "objective_network_generator": lambda _: MLPLeakyRelu(),
         "num_layers": 2,
         "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
@@ -104,16 +93,11 @@ def mnist_problems():
 
         "evaluate_every_n_epoch": 1,
         "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
-
-        "save_every_n_epoch": math.inf,
-        "load_weights": False,
-        "load_path": "result",
 
         "comparison_optimizers": [keras.optimizers.SGD(), keras.optimizers.Adam()],
     }
 
     mnist_tanh = {
-        "config_name": "mnist_tanh",
         "objective_network_generator": lambda _: MLPTanh(),
         "num_layers": 2,
         "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
@@ -138,15 +122,10 @@ def mnist_problems():
         "evaluate_every_n_epoch": 1,
         "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
 
-        "save_every_n_epoch": math.inf,
-        "load_weights": False,
-        "load_path": "result",
-
         "comparison_optimizers": [keras.optimizers.SGD(), keras.optimizers.Adam()],
     }
 
     mnist_sigmoid_short = {
-        "config_name": "mnist_sigmoid_short",
         "objective_network_generator": lambda _: MLPSigmoid(),
         "num_layers": 2,
         "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
@@ -171,15 +150,10 @@ def mnist_problems():
         "evaluate_every_n_epoch": 1,
         "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
 
-        "save_every_n_epoch": math.inf,
-        "load_weights": False,
-        "load_path": "result",
-
         "comparison_optimizers": [keras.optimizers.SGD(), keras.optimizers.Adam()],
     }
 
     mnist_relu_short = {
-        "config_name": "mnist_relu_short",
         "objective_network_generator": lambda _: MLPRelu(),
         "num_layers": 2,
         "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
@@ -204,15 +178,10 @@ def mnist_problems():
         "evaluate_every_n_epoch": 1,
         "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
 
-        "save_every_n_epoch": math.inf,
-        "load_weights": False,
-        "load_path": "result",
-
         "comparison_optimizers": [keras.optimizers.SGD(), keras.optimizers.Adam()],
     }
 
     mnist_leaky_relu_short = {
-        "config_name": "mnist_leaky_relu_short",
         "objective_network_generator": lambda _: MLPLeakyRelu(),
         "num_layers": 2,
         "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
@@ -237,15 +206,10 @@ def mnist_problems():
         "evaluate_every_n_epoch": 1,
         "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
 
-        "save_every_n_epoch": math.inf,
-        "load_weights": False,
-        "load_path": "result",
-
         "comparison_optimizers": [keras.optimizers.SGD(), keras.optimizers.Adam()],
     }
 
     mnist_tanh_short = {
-        "config_name": "mnist_tanh_short",
         "objective_network_generator": lambda _: MLPTanh(),
         "num_layers": 2,
         "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
@@ -270,15 +234,10 @@ def mnist_problems():
         "evaluate_every_n_epoch": 1,
         "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
 
-        "save_every_n_epoch": math.inf,
-        "load_weights": False,
-        "load_path": "result",
-
         "comparison_optimizers": [keras.optimizers.SGD(), keras.optimizers.Adam()],
     }
 
     mnist_sigmoid_multiple = {
-        "config_name": "mnist_sigmoid_multiple",
         "objective_network_generator": lambda _: MLPSigmoid(),
         "num_layers": 2,
         "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
@@ -302,16 +261,11 @@ def mnist_problems():
 
         "evaluate_every_n_epoch": 1,
         "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
-
-        "save_every_n_epoch": math.inf,
-        "load_weights": False,
-        "load_path": "result",
 
         "comparison_optimizers": [keras.optimizers.SGD(), keras.optimizers.Adam()],
     }
 
     mnist_relu_multiple = {
-        "config_name": "mnist_relu_multiple",
         "objective_network_generator": lambda _: MLPRelu(),
         "num_layers": 2,
         "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
@@ -336,15 +290,10 @@ def mnist_problems():
         "evaluate_every_n_epoch": 1,
         "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
 
-        "save_every_n_epoch": math.inf,
-        "load_weights": False,
-        "load_path": "result",
-
         "comparison_optimizers": [keras.optimizers.SGD(), keras.optimizers.Adam()],
     }
 
     mnist_sigmoid_multiple_short = {
-        "config_name": "mnist_sigmoid_multiple_short",
         "objective_network_generator": lambda _: MLPSigmoid(),
         "num_layers": 2,
         "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
@@ -369,15 +318,10 @@ def mnist_problems():
         "evaluate_every_n_epoch": 1,
         "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
 
-        "save_every_n_epoch": math.inf,
-        "load_weights": False,
-        "load_path": "result",
-
         "comparison_optimizers": [keras.optimizers.SGD(), keras.optimizers.Adam()],
     }
 
     mnist_relu_multiple_short = {
-        "config_name": "mnist_relu_multiple_short",
         "objective_network_generator": lambda _: MLPRelu(),
         "num_layers": 2,
         "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
@@ -401,10 +345,6 @@ def mnist_problems():
 
         "evaluate_every_n_epoch": 1,
         "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
-
-        "save_every_n_epoch": math.inf,
-        "load_weights": False,
-        "load_path": "result",
 
         "comparison_optimizers": [keras.optimizers.SGD(), keras.optimizers.Adam()],
     }

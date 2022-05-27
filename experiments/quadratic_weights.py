@@ -1,5 +1,3 @@
-import math
-
 import tensorflow as tf
 from src.custom_metrics import QuadMetric
 from src.objectives import QuadraticFunctionLayer
@@ -16,7 +14,6 @@ def quadratic_weights():
     y = tf.random.normal([16])
 
     quadratic_weights_1_every = {
-        "config_name": "quadratic_weights_1_every",
         "objective_network_generator": lambda same: QuadraticFunctionLayer(16, same, W, y),
         "num_layers": 1,
         "objective_loss_fn": lambda y_true, y_pred: y_pred,
@@ -40,14 +37,9 @@ def quadratic_weights():
 
         "evaluate_every_n_epoch": 1,
         "evaluation_metric": QuadMetric(),
-
-        "save_every_n_epoch": math.inf,
-        "load_weights": False,
-        "load_path": "result",
     }
 
     quadratic_weights_inc_every = {
-        "config_name": "quadratic_weights_inc_every",
         "objective_network_generator": lambda same: QuadraticFunctionLayer(16, same, W, y),
         "num_layers": 1,
         "objective_loss_fn": lambda y_true, y_pred: y_pred,
@@ -71,14 +63,9 @@ def quadratic_weights():
 
         "evaluate_every_n_epoch": 1,
         "evaluation_metric": QuadMetric(),
-
-        "save_every_n_epoch": math.inf,
-        "load_weights": False,
-        "load_path": "result",
     }
 
     quadratic_weights_1_once = {
-        "config_name": "quadratic_weights_1_once",
         "objective_network_generator": lambda same: QuadraticFunctionLayer(16, same, W, y),
         "num_layers": 1,
         "objective_loss_fn": lambda y_true, y_pred: y_pred,
@@ -102,14 +89,9 @@ def quadratic_weights():
 
         "evaluate_every_n_epoch": 1,
         "evaluation_metric": QuadMetric(),
-
-        "save_every_n_epoch": math.inf,
-        "load_weights": False,
-        "load_path": "result",
     }
 
     quadratic_weights_inc_once = {
-        "config_name": "quadratic_weights_inc_once",
         "objective_network_generator": lambda same: QuadraticFunctionLayer(16, same, W, y),
         "num_layers": 1,
         "objective_loss_fn": lambda y_true, y_pred: y_pred,
@@ -133,10 +115,6 @@ def quadratic_weights():
 
         "evaluate_every_n_epoch": 1,
         "evaluation_metric": QuadMetric(),
-
-        "save_every_n_epoch": math.inf,
-        "load_weights": False,
-        "load_path": "result",
     }
 
     experiment([quadratic_weights_1_every, quadratic_weights_inc_every], ["$w_t = 1$", "$w_t = \\beta t + 1$"], 10, "quadratic_weights_every")

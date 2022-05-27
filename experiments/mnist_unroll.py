@@ -14,7 +14,6 @@ def mnist_unroll():
     mnist_dnn_dataset = tf.data.Dataset.from_tensor_slices((x_train.reshape(60000, 784).astype("float32") / 255, y_train))
 
     mnist_unroll_8 = {
-        "config_name": "mnist_unroll_8",
         "objective_network_generator": lambda _: MLP(),
         "num_layers": 2,
         "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
@@ -38,14 +37,9 @@ def mnist_unroll():
 
         "evaluate_every_n_epoch": 1,
         "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
-
-        "save_every_n_epoch": math.inf,
-        "load_weights": False,
-        "load_path": "result",
     }
 
     mnist_unroll_16 = {
-        "config_name": "mnist_unroll_16",
         "objective_network_generator": lambda _: MLP(),
         "num_layers": 2,
         "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
@@ -69,14 +63,9 @@ def mnist_unroll():
 
         "evaluate_every_n_epoch": 1,
         "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
-
-        "save_every_n_epoch": math.inf,
-        "load_weights": False,
-        "load_path": "result",
     }
 
     mnist_unroll_32 = {
-        "config_name": "mnist_unroll_32",
         "objective_network_generator": lambda _: MLP(),
         "num_layers": 2,
         "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
@@ -100,10 +89,6 @@ def mnist_unroll():
 
         "evaluate_every_n_epoch": 1,
         "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
-
-        "save_every_n_epoch": math.inf,
-        "load_weights": False,
-        "load_path": "result",
     }
 
     experiment([mnist_unroll_8, mnist_unroll_16, mnist_unroll_32], ["$T$ = 8", "$T$ = 16", "$T$ = 32"], 10, "mnist_unroll")

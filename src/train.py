@@ -1,7 +1,3 @@
-import os
-
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-
 import copy
 import math
 from collections import deque
@@ -25,30 +21,31 @@ class LearningToLearn():
                     setattr(self, name, default)
 
         # initialize attributes with default values if not specified in config
-        add_attr("dataset", None)
-        add_attr("batch_size", 64)
-        add_attr("optimizer_network_generator", None)
-        add_attr("train_optimizer_steps", 16)
         add_attr("objective_network_generator", None)
-        add_attr("objective_loss_fn", None)
-        add_attr("evaluation_metric", None)
-        add_attr("super_epochs", 1)
-        add_attr("epochs", 32)
-        add_attr("save_every_n_epoch", math.inf)
-        add_attr("evaluate_every_n_epoch", 1)
-        add_attr("accumulate_losses", tf.add_n)
-        add_attr("optimizer_optimizer", keras.optimizers.Adam())
-        add_attr("config_name", None)
-        add_attr("load_weights", False)
-        add_attr("load_path", "result")
-        add_attr("comparison_optimizers", [])
-        add_attr("max_steps_per_super_epoch", math.inf)
-        add_attr("train_optimizer_every_step", False)
-        add_attr("objective_gradient_preprocessor", lambda x: x)
-        add_attr("evaluation_size", 0.2)
         add_attr("num_layers", 1)
+        add_attr("objective_loss_fn", None)
+        add_attr("objective_gradient_preprocessor", lambda x: x)
+
+        add_attr("dataset", None)
+        add_attr("evaluation_size", 0.2)
+        add_attr("batch_size", 64)
+
+        add_attr("optimizer_network_generator", None)
         add_attr("one_optimizer", True)
         add_attr("preprocess_optimizer_gradients", True)
+        add_attr("optimizer_optimizer", keras.optimizers.Adam())
+        add_attr("train_optimizer_steps", 16)
+        add_attr("accumulate_losses", tf.add_n)
+        add_attr("train_optimizer_every_step", False)
+
+        add_attr("super_epochs", 1)
+        add_attr("epochs", 32)
+        add_attr("max_steps_per_super_epoch", math.inf)
+
+        add_attr("evaluate_every_n_epoch", 1)
+        add_attr("evaluation_metric", None)
+
+        add_attr("comparison_optimizers", [])
 
         self.util = Util()
         self.objective_network_weights = {}
@@ -62,10 +59,6 @@ class LearningToLearn():
         for _ in range(num_layers):
             self.optimizer_networks.append(self.optimizer_network_generator())
 
-        if self.load_weights:
-            for optimizer_network in self.optimizer_networks:
-                optimizer_network.load_weights(self.get_checkpoint_path(alternative=self.load_path))
-
     # shuffle the dataset
     def get_shuffeled_datasets(self):
         dataset_length = len(self.dataset)
@@ -75,19 +68,6 @@ class LearningToLearn():
         dataset_test = self.dataset.take(test_size).shuffle(buffer_size=1024).batch(self.batch_size, drop_remainder=True)
 
         return dataset_train, dataset_test
-
-    # build path to store the checkpoint
-    def get_checkpoint_path(self, super_epoch = 0, epoch = 0, alternative = None):
-        if alternative:
-            filename = alternative
-        else:
-            filename = f"{super_epoch}_{epoch}"
-
-        dirname = os.path.dirname(__file__)
-        relative_path = f"checkpoints\{self.config_name}\{filename}"
-        path = os.path.join(dirname, relative_path)
-
-        return path
 
     # clear the objective parameter dictionary
     # should be called before building a new objective network
@@ -188,13 +168,8 @@ class LearningToLearn():
                 if epoch % self.evaluate_every_n_epoch == 0:
                     self.evaluate_objective(objective_network, dataset_test)
 
-                if epoch % self.save_every_n_epoch == 0:
-                    self.optimizer_networks[0].save_weights(self.get_checkpoint_path(super_epoch, epoch))
-
                 if steps_left == 0:
                     break
-
-        self.optimizer_networks[0].save_weights(self.get_checkpoint_path(alternative="result"))
 
     # train the objective function for a given number of steps or the length of the dataset
     def train_objective(self, objective_network, dataset, steps_left = math.inf, train_optimizer = False, return_losses = False):

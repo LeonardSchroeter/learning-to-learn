@@ -6,7 +6,7 @@ from src.optimizer_rnn import LSTMNetworkPerParameter
 from src.util import preprocess_gradients
 from tensorflow import keras
 
-from experiments.util import experiment, train_multiple
+from experiments.util import experiment
 
 
 def mnist_preprocessing():
@@ -14,7 +14,6 @@ def mnist_preprocessing():
     mnist_dnn_dataset = tf.data.Dataset.from_tensor_slices((x_train.reshape(60000, 784).astype("float32") / 255, y_train))
 
     mnist_preprocessing = {
-        "config_name": "mnist_preprocessing",
         "objective_network_generator": lambda _: MLP(),
         "num_layers": 2,
         "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
@@ -38,16 +37,11 @@ def mnist_preprocessing():
         "evaluate_every_n_epoch": 1,
         "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
 
-        "save_every_n_epoch": math.inf,
-        "load_weights": False,
-        "load_path": "result",
-
         "comparison_optimizers": [keras.optimizers.SGD(), keras.optimizers.Adam()],
     }
 
 
     mnist_no_preprocessing = {
-        "config_name": "mnist_no_preprocessing",
         "objective_network_generator": lambda _: MLP(),
         "num_layers": 2,
         "objective_loss_fn": keras.losses.SparseCategoricalCrossentropy(),
@@ -70,10 +64,6 @@ def mnist_preprocessing():
 
         "evaluate_every_n_epoch": 1,
         "evaluation_metric": keras.metrics.SparseCategoricalAccuracy(),
-
-        "save_every_n_epoch": math.inf,
-        "load_weights": False,
-        "load_path": "result",
 
         "comparison_optimizers": [keras.optimizers.SGD(), keras.optimizers.Adam()],
     }
